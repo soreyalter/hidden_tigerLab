@@ -13,6 +13,7 @@ public class Slp {
         }
 
         // s, e
+        // 逗号表达式(s, e)
         public record Eseq(Stm.T stm,
                            T exp) implements T {
         }

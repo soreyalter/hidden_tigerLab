@@ -7,18 +7,50 @@ public class Token {
     public enum Kind {
         ADD,
         CLASS,
-        COMMA,
+        COMMA,  // ,
         DOT,
         EOF,
         ID,
-        INT,
-        LBRACKET,
-        LENGTH,
-        LPAREN,
-        NEW,
-        RBRACKET,
-        RPAREN,
-        SEMICOLON,
+        INT,    // int
+        LBRACKET,   // [
+        LENGTH, // length
+        LPAREN, // (
+        NEW,    // new
+        RBRACKET,   // ]
+        RPAREN, // )
+        // SEMICOLON,  // ;
+        // NEW TOKEN ADDED
+        AND, // "&&"
+        ASSIGN, // "="
+        BOOLEAN, // "boolean"
+        ELSE, // "else"
+        EXTENDS, // "extends"
+        FALSE, // "false"
+        IF, // "if"
+        LBRACE, // "{"
+        LT, // "<"
+        MAIN, // "main"
+        NOT, // "!"
+        NUM, // IntegerLiteral
+        // "out" is not a Java key word, but we treat it as
+        // a MiniJava keyword, which will make the
+        // compilation a little easier. Similar cases apply
+        // for "println", "System" and "String".
+        OUT, // "out"
+        PRINTLN, // "println"
+        PUBLIC, // "public"
+        RBRACE, // "}"
+        RETURN, // "return"
+        SEMI, // ";"
+        STATIC, // "static"
+        STRING, // "String"
+        SUB, // "-"
+        SYSTEM, // "System"
+        THIS, // "this"
+        TIMES, // "*"
+        TRUE, // "true"
+        VOID, // "void"
+        WHILE, // "while"
     }
 
     // kind of the token
@@ -57,6 +89,7 @@ public class Token {
         : at row \{this.rowNum == null ? "<null>" : rowNum.toString()}
         : at column \{this.colNum == null ? "<null>" : colNum.toString()}
         """;
+        // System.out.println(this.kind);
         return this.kind + s;
     }
 }
