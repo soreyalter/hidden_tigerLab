@@ -29,9 +29,10 @@ public class Parser {
     // /////////////////////////////////////////////
     // utility methods to connect the lexer and the parser.
     private void advance() {
+        // System.out.println(current);
         current = lexer.nextToken();
     }
-
+    // new
     private void eatToken(Token.Kind kind) {
         if (kind.equals(current.kind)) {
             advance();
@@ -92,6 +93,14 @@ public class Parser {
             case ID:
                 advance();
                 return;
+            case TRUE:
+                advance();
+            case FALSE:
+                advance();
+            case THIS:
+                advance();
+            case NUM:
+                advance();
             case NEW: {
                 advance();
                 switch (current.kind) {
@@ -107,11 +116,13 @@ public class Parser {
                         eatToken(Token.Kind.RPAREN);
                         return;
                     default:
-                        error("parseAtomExp exception");
+                        System.out.println(current);
+                        error(STR."\{current}");
                 }
             }
             default:
-                advance();
+                error("parseAtomExp exception out");
+                // advance();
                 return;
         }
     }
@@ -131,10 +142,12 @@ public class Parser {
                     return;
                 }
                 System.out.println("parseNotExp");
+                // 报错进了这个分支 Fac(). dot
                 eatToken(Token.Kind.ID);
                 eatToken(Token.Kind.LPAREN);
                 parseExpList();
                 eatToken(Token.Kind.RPAREN);
+                return;
             } else {
                 advance();
                 parseExp();
@@ -218,13 +231,6 @@ public class Parser {
                 parseStatements();
                 eatToken(Token.Kind.RBRACE);
             case IF:
-                // advance(); 修改
-                // eatToken(Token.Kind.LPAREN);
-                // parseExp();
-                // eatToken(Token.Kind.RPAREN);
-                // parseStatement();
-                // eatToken(Token.Kind.ELSE);
-                // parseStatement();
                 eatToken(Token.Kind.IF);
                 eatToken(Token.Kind.LPAREN);
                 parseExp();
@@ -241,6 +247,7 @@ public class Parser {
                 parseStatement();
             case SYSTEM:
                 // advance();
+                System.out.println("parseExp done");
                 eatToken(Token.Kind.SYSTEM);
                 eatToken(Token.Kind.DOT);
                 eatToken(Token.Kind.OUT);
@@ -248,9 +255,11 @@ public class Parser {
                 eatToken(Token.Kind.PRINTLN);
                 eatToken(Token.Kind.LPAREN);
                 parseExp();
+                System.out.println("parseExp done");
                 eatToken(Token.Kind.RPAREN);
                 eatToken(Token.Kind.SEMI);
             case ID:
+                // 是isspecial的问题
                 if (isSpecial) // it means this is returned from VarDecls
                 {
                     current = currentNext;
@@ -270,7 +279,7 @@ public class Parser {
                             eatToken(Token.Kind.SEMI);
                             isSpecial = false;
                         default:
-                            error("expect ASSIGN or LBRACK");
+                            error("expect ASSIGN or LBRACKET");
 
                     }
 
@@ -331,11 +340,14 @@ public class Parser {
             case INT:
                 eatToken(Token.Kind.INT);
                 if (current.kind == Token.Kind.LBRACKET) {
+                    // 数组声明
                     eatToken(Token.Kind.LBRACKET);
                     eatToken(Token.Kind.RBRACKET);
                 }
+                return;
             case BOOLEAN:
                 eatToken(Token.Kind.BOOLEAN);
+                return;
             default:
                 System.out.println("parseType id");
                 eatToken(Token.Kind.ID);
@@ -362,7 +374,7 @@ public class Parser {
     }
 
     // VarDecls -> VarDecl VarDecls
-    // ->
+    // -> int x; boolean y;
     private void parseVarDecls() throws Exception {
         // throw new util.Todo();
         //        return;
@@ -370,6 +382,8 @@ public class Parser {
                 || current.kind == Token.Kind.BOOLEAN
                 || current.kind == Token.Kind.ID) {
             if (current.kind != Token.Kind.ID) {
+                // current.kind = INT / BOOLEAN
+                // VarDecl -> Type id ;
                 parseVarDecl();
             } else {
                 int linenum = current.rowNum;
@@ -378,8 +392,8 @@ public class Parser {
                 System.out.println("parseVarDecls id");
                 eatToken(Token.Kind.ID);
                 if (current.kind == Token.Kind.ASSIGN) {
-                    // x = 1;
-                    currentNext = current;
+                    // x = y;
+                    currentNext = current;  // currentNext: "="
                     current = new Token(Token.Kind.ID, linenum, colnum);
                     isSpecial = true;
                     return;
@@ -488,7 +502,7 @@ public class Parser {
     //   public static void main ( String [] id ) {
     //     Statement
     //   }
-    // }
+    // } 这个右括号在parseProgram里面，这里不写
     private void parseMainClass() {
         // Lab 1. Exercise 11: Fill in the missing code
         // to parse a main class as described by the
@@ -514,6 +528,8 @@ public class Parser {
         parseStatement();
         // System.out.println("parseMainClass");
         eatToken(Token.Kind.RBRACE);
+        // eatToken(Token.Kind.RBRACE);
+        // 右边的大括号在 parseProgram 里面
     }
 
     // Program -> MainClass ClassDecl*
@@ -521,6 +537,7 @@ public class Parser {
         parseMainClass();
         // 自己添加的行
         eatToken(Token.Kind.RBRACE);
+        System.out.println("parseclass begin");
         parseClassDecls();
         eatToken(Token.Kind.EOF);
         return;
