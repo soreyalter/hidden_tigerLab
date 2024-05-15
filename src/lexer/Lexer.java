@@ -72,7 +72,7 @@ public record Lexer(String fileName,
             if (c == '\n') {
                 // 如果读到换行符，更新行号并将列号重置为0
                 lineNum++;
-                colNum = 0;
+                colNum = 1;
             } else {
                 // 否则，增加列号
                 colNum++;
