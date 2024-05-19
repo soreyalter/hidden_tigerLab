@@ -48,6 +48,7 @@ public class PrettyPrint {
     // print statement
     public void ppStm(Stm.T stm) {
         switch (stm) {
+            // s1; s2
             case Stm.Compound(
                     Stm.T s1,
                     Stm.T s2
@@ -56,6 +57,7 @@ public class PrettyPrint {
                 println(";");
                 ppStm(s2);
             }
+            // x := e
             case Stm.Assign(
                     String x,
                     Exp.T e
@@ -65,11 +67,16 @@ public class PrettyPrint {
             }
             case Stm.Print(List<Exp.T> exps) -> {
                 System.out.print("print(");
-                exps.forEach(x -> {
-                            ppExp(x);
-                            print(", ");
-                        }
-                );
+                // exps.forEach(x -> {
+                //             ppExp(x);
+                //             print(", ");
+                //         }
+                // );
+                // TODO: Exercise 4 => fix the bug
+                for (int i=0; i<exps.size(); i++) {
+                    ppExp(exps.get(i));
+                    if (i != exps.size()-1) print(", ");
+                }
                 System.out.print(")");
             }
         }
