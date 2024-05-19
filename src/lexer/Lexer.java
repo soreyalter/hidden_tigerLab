@@ -65,7 +65,12 @@ public record Lexer(String fileName,
     // from the input stream.
     // Return EOF when reaching the end of the input stream.
     private Token nextToken0() throws Exception {
-        int c = this.fileStream.read();
+        // 明确进入这个函数的时候 c 在上一个token的末尾符号，还是末尾符号的下一个位置
+        int c = this.fileStream.read(); // c -> ' '(12)
+        colNum++;
+        // '=' : 11
+        // colNum = 12
+
         // skip all kinds of "blanks"
         // think carefully about how to set up "colNum" and "rowNum" correctly?
         while (' ' == c || '\t' == c || '\n' == c) {
@@ -76,9 +81,13 @@ public record Lexer(String fileName,
             } else {
                 // 否则，增加列号
                 colNum++;
+                // 13
             }
-            c = this.fileStream.read();
+            c = this.fileStream.read(); // c -> 't'(13)
         }
+        // = 后面的空格处理不应++
+        // colNum++;
+
         switch (c) {
             case -1:
                 // The value for "lineNum" is now "null",
@@ -115,14 +124,52 @@ public record Lexer(String fileName,
                 return new Token(Token.Kind.NOT, lineNum, colNum);
             case ';':
                 return new Token(Token.Kind.SEMI, lineNum, colNum);
+            case '/':
+                this.fileStream.mark(1);
+                c = this.fileStream.read();
+                if (c == '/') {
+                    this.fileStream.reset();
+                    while (c != '\n') {
+                        c = this.fileStream.read();
+                    }
+                    lineNum++;
+                    colNum = 1;
+                    return nextToken0();
+                }
+                else if (c == '*') {
+                    // this.fileStream.reset();
+                    c = this.fileStream.read();
+                    while (true) {
+                        if (c != '*'){
+                            c = this.fileStream.read();
+                            if (c == '\n') {
+                                lineNum++;
+                                colNum = 1;
+                            }
+                        }
+                        else {
+                            // this.fileStream.mark(1);
+                            c = this.fileStream.read();
+                            if (c == '/') {
+                                return nextToken0();
+                            }
+                            else {
+                                c = this.fileStream.read();
+                            }
+                        }
+                    }
+                }
             case '&':
                 this.fileStream.mark(1);
                 c = this.fileStream.read();
                 if(c == '&'){
-                    return new Token(Token.Kind.AND, lineNum, colNum);
+                    int lie = colNum;
+                    colNum += 1;
+                    return new Token(Token.Kind.AND, lineNum, lie);
                 }else{
                     this.fileStream.reset();
                     // Error.error("error", "lexer", "'&' not allowed", lineNum, colNum);
+                    // colNum++;
                     return new Token(Token.Kind.AND, lineNum, colNum);
                 }
             default:
@@ -150,7 +197,10 @@ public record Lexer(String fileName,
                         // Error.error("error", "lexer", "'&' not allowed", lineNum);
                         System.exit(0);
                     }
-                    return new Token(Token.Kind.NUM, temp, lineNum, colNum);
+                    int lie = colNum;
+                    colNum += temp.length()-1;
+                    // 此时 colNum 和 c 都指向当前 token 的末尾符号
+                    return new Token(Token.Kind.NUM, temp, lineNum, lie);
                 }else if(patternAlpha.matcher(temp).matches()){
                     //字母或下滑线开头
                     while(patternAlphas.matcher(""+(char)c).matches()){
@@ -161,10 +211,16 @@ public record Lexer(String fileName,
                     this.fileStream.reset();
                     Token tt = nsingals.get(temp);
                     if(null != tt) {
+                        // 如果是关键字
                         tt.rowNum = lineNum;
+                        tt.colNum = colNum;
+                        colNum += temp.length()-1;
                         return tt;
                     }
-                    return new Token(Token.Kind.ID, temp, lineNum, colNum);
+                    // 不是关键字
+                    int lie = colNum;
+                    colNum += temp.length()-1;
+                    return new Token(Token.Kind.ID, temp, lineNum, lie);
                 }else{
                     // Error.error("error", "lexer", "unrecognize char \"" + temp + "\"", lineNum);
                     return nextToken0();

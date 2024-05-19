@@ -35,7 +35,7 @@ public class Parser {
             return;
         }
         System.out.println(STR."Expects: \{kind}");
-        System.out.println(STR."But got: \{current.kind}");
+        System.out.println(STR."But got: \{current.kind} at row \{current.rowNum}, line \{current.colNum}");
         error("syntax error");
     }
 
@@ -84,11 +84,33 @@ public class Parser {
                 advance();
                 parseExp();
                 eatToken(Token.Kind.RPAREN);
+                printID(STR."========  parseAtomExp after eatToken), current -> \{current.kind} =========");
                 return;
             case ID:
                 advance();
                 return;
-            case NEW: {
+            case THIS:
+                advance();
+                return;
+            case TRUE:
+                advance();
+                return;
+            case FALSE:
+                advance();
+                return;
+            case NUM:
+                advance();
+                return;
+            case SUB:
+                advance();
+                if (current.kind == Token.Kind.NUM) {
+                    advance();
+                    return;
+                } else {
+                    error(STR."Error: got \{current.kind}");
+                }
+                return;
+            case NEW:
                 advance();
                 switch (current.kind) {
                     case INT:
@@ -106,9 +128,8 @@ public class Parser {
                         // throw new Todo();
                         error("in parseAtomExp");
                 }
-            }
             default:
-                advance();
+                error("parseAtomExp failed");
                 return;
         }
     }
@@ -120,11 +141,11 @@ public class Parser {
     // 可以被取“非”的表达式
     private void parseNotExp() {
         parseAtomExp();
-        while (current.kind.equals(Token.Kind.DOT) ||
-                current.kind.equals(Token.Kind.LBRACKET)) {
-            if (current.kind.equals(Token.Kind.DOT)) {
+        if (current.kind == Token.Kind.DOT ||
+                current.kind == Token.Kind.LBRACKET) {
+            if (current.kind == Token.Kind.DOT) {
                 advance();
-                if (current.kind.equals(Token.Kind.LENGTH)) {
+                if (current.kind == Token.Kind.LENGTH) {
                     // .length
                     advance();
                     return;
@@ -134,38 +155,47 @@ public class Parser {
                 eatToken(Token.Kind.LPAREN);
                 parseExpList();
                 eatToken(Token.Kind.RPAREN);
+                return;
             } else {
                 // [exp]
-                advance();
+                eatToken(Token.Kind.LBRACKET);
                 parseExp();
                 eatToken(Token.Kind.RBRACKET);
+                return;
             }
         }
+        printID(STR."======== parseNotExp return, current -> \{current.kind} =========");
         return;
     }
 
     // TimesExp -> ! TimesExp
     // -> NotExp
-    // !!!..! TimesExp || NotExp
     private void parseTimesExp() {
         // throw new Todo();
+        if (current.kind != Token.Kind.NOT){
+            parseNotExp();
+            return;
+        }
         while (current.kind == Token.Kind.NOT) {
-            advance();
+            advance();  // -> (
             parseTimesExp();
         }
-        parseNotExp();
+        return;
     }
 
     // AddSubExp -> TimesExp * TimesExp
     // -> TimesExp
-    // TimesExp * TimesExp * TimesExp * TimesExp ... * TimesExp
     private void parseAddSubExp() {
         parseTimesExp();
         // throw new Todo();
-        while (current.kind == Token.Kind.TIMES) {
+        if (current.kind == Token.Kind.TIMES) {
             advance();
             parseTimesExp();
+            printID(STR."======== parseAddSubExp return, current -> \{current.kind} =========");
+            return;
         }
+        printID(STR."======== parseAddSubExp return, current -> \{current.kind} =========");
+        return;
     }
 
     // LtExp -> AddSubExp + AddSubExp
@@ -174,10 +204,15 @@ public class Parser {
     private void parseLtExp() {
         parseAddSubExp();
         // throw new Todo();
-        while (current.kind == Token.Kind.ADD || current.kind == Token.Kind.SUB) {
+        if (current.kind == Token.Kind.ADD
+                || current.kind == Token.Kind.SUB) {
             advance();
             parseAddSubExp();
+            return;
         }
+        printID(STR."======== parseLtExp return, current -> \{current.kind} =========");
+
+        return;
     }
 
     // AndExp -> LtExp < LtExp
@@ -185,10 +220,14 @@ public class Parser {
     private void parseAndExp() {
         parseLtExp();
         // throw new Todo();
-        while (current.kind == Token.Kind.LT) {
+        if (current.kind == Token.Kind.LT) {
             advance();
             parseLtExp();
+            printID(STR."======== parseAndExp return, current -> \{current.kind} =========");
+
+            return;
         }
+        return;
     }
 
     // Exp -> AndExp && AndExp
@@ -196,7 +235,7 @@ public class Parser {
     private void parseExp() {
         parseAndExp();
         // throw new Todo();
-        while (current.kind == Token.Kind.AND) {
+        if (current.kind == Token.Kind.AND) {
             advance();
             parseAndExp();
         }
@@ -220,6 +259,8 @@ public class Parser {
             case IF:
                 advance();
                 eatToken(Token.Kind.LPAREN);
+                // 问题就是这个 parseExp
+                // current -> !
                 parseExp();
                 eatToken(Token.Kind.RPAREN);
                 parseStatement();
@@ -246,15 +287,20 @@ public class Parser {
                 return;
             case ID:
                 if (isSpecial) {
+                    // printID("========= special =============");
                     // 这是混进变量声明中的表达式statement走的支线，此时 current.kind = id，
                     // 但是nextToken 得到的是 = 或者 [ 后的那个 token
                     // currentNext 记录了 id 后面的 token是 = 还是 [
                     current = currentNext;
+                    // 浅拷贝和深拷贝导致的
+                    printID("+++++++++++++++++next: "+ currentNext.toString());
+                    printID("+++++++++++++++++current: "+ current.toString());
                     switch (current.kind){
                         case ASSIGN:
                             advance();
                             parseExp();
                             // 处理完把标志位恢复
+                            eatToken(Token.Kind.SEMI);
                             isSpecial = false;
                             return;
                         case LBRACKET:
@@ -268,26 +314,27 @@ public class Parser {
                     }
 
                 }
-                // printID(STR."=============\{current.toString()}===========");
-                advance();
-                if (current.kind == Token.Kind.ASSIGN) {
-                    // id = exp ;
+                else {
                     advance();
-                    parseExp();
-                    eatToken(Token.Kind.SEMI);
-                    return;
+                    if (current.kind == Token.Kind.ASSIGN) {
+                        // id = exp ;
+                        advance();
+                        parseExp();
+                        eatToken(Token.Kind.SEMI);
+                        return;
+                    }
+                    else if (current.kind == Token.Kind.LBRACKET) {
+                        // id [Exp] = Exp ;
+                        advance();
+                        parseExp();
+                        eatToken(Token.Kind.RBRACKET);
+                        eatToken(Token.Kind.ASSIGN);
+                        parseExp();
+                        eatToken(Token.Kind.SEMI);
+                        return;
+                    }
+                    else error(STR."parse statement failed in case ID, got \{current.kind}");
                 }
-                else if (current.kind == Token.Kind.LBRACKET) {
-                    // id [Exp] = Exp ;
-                    advance();
-                    parseExp();
-                    eatToken(Token.Kind.RBRACKET);
-                    eatToken(Token.Kind.ASSIGN);
-                    parseExp();
-                    eatToken(Token.Kind.SEMI);
-                    return;
-                }
-                else error(STR."parse statement failed in case ID, got \{current.kind}");
             default: error("parse statement failed, no token matched");
         }
     }
@@ -375,8 +422,10 @@ public class Parser {
                 // 试探一下下面是 id, 还是别的东西
                 advance();
                 if (current.kind != Token.Kind.ID){
+                    // 不是变量声明
                     currentNext = current;
-                    current.kind = Token.Kind.ID;
+                    // current.kind = Token.Kind.ID;
+                    current = new Token(Token.Kind.ID, currentNext.rowNum, currentNext.colNum);
                     isSpecial = true;
                     // 此时已经不是声明语句，直接结束 parseVarDecls 的解析
                     return;
@@ -396,8 +445,14 @@ public class Parser {
     // FormalList -> Type id FormalRest*
     // ->
     // FormalRest -> , Type id
+    // 唯一一个，可能在执行结束后，current不指向下一个token的函数
+    // 因为eat 左括号后，当前可能是形参，也可能是右括号，是右括号的话直接返回给 methodDecl 中的eatToken
     private void parseFormalList() {
         // throw new Todo();
+        if (current.kind == Token.Kind.RPAREN) {
+            // advance();
+            return;
+        }
         while (current.kind == Token.Kind.INT
                 || current.kind == Token.Kind.BOOLEAN
                 || current.kind == Token.Kind.ID) {
@@ -454,8 +509,7 @@ public class Parser {
         if (current.kind == Token.Kind.LBRACE) {
             advance();
             parseVarDecls();
-            printID("******** parseVarDecls done *******");
-
+            // parseVarDecls 已完成
             parseMethodDecls();
             eatToken(Token.Kind.RBRACE);
         }
