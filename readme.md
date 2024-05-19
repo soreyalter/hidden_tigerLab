@@ -19,7 +19,7 @@ java --enable-preview -cp production/tiger-sorey Tiger D:\USTC_POPL\tiger-sorey\
 
 - 可以输出最后的文件终结符 token EOF
 
-![Snipaste_2024-05-18_16-19-09](\assets\Snipaste_2024-05-18_16-19-09.jpg)
+![img](https://github.com/soreyalter/popl_tiger/raw/lab1/assets/Snipaste_2024-05-18_16-19-09.jpg)
 
 IDE：
 
