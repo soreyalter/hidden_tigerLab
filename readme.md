@@ -3,13 +3,11 @@
 **注意：**
 
 - build excludes ./test
-- test with command: 
+- test with command:
 
 ```powershell
 java --enable-preview -cp ./out/production/tiger-sorey Tiger [testFilePath] -dump token
 ```
-
-
 
 **实验结果：**
 
@@ -21,9 +19,7 @@ java --enable-preview -cp production/tiger-sorey Tiger D:\USTC_POPL\tiger-sorey\
 
 - 可以输出最后的文件终结符 token EOF
 
-![Snipaste_2024-05-18_16-19-09](D:\USTC_POPL\tiger-sorey\assets\Snipaste_2024-05-18_16-19-09.jpg)
-
-
+![Snipaste_2024-05-18_16-19-09](\assets\Snipaste_2024-05-18_16-19-09.jpg)
 
 IDE：
 
@@ -32,4 +28,3 @@ IDE：
 JDK:
 
 - Oracle OpenJDK version 22.0.1
-
