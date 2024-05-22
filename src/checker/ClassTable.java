@@ -18,14 +18,17 @@ public class ClassTable {
     }
 
     // a special type for method: argument and return types
+    // 包括 返回类型 和 形参类型列表
     public record MethodType(Type.T retType,
                              List<Ast.Type.T> argsType) {
         @Override
         public String toString() {
+            // (arg1Type, arg2Type,) -> returnType
             StringBuilder stringBuilder = new StringBuilder();
             stringBuilder.append("(");
             for (Type.T type : this.argsType) {
-                stringBuilder.append(STR."\{type.toString()}, ");
+                // stringBuilder.append(STR."\{type.toString()}, ");
+                stringBuilder.append(STR."\{Type.convertString(type)}, ");
             }
             stringBuilder.append(STR.") -> \{this.retType.toString()}");
             return stringBuilder.toString();
@@ -42,6 +45,7 @@ public class ClassTable {
             // the method in a class: its type and fresh id
             java.util.HashMap<Id, Tuple.Two<MethodType, Id>> methods) {
 
+        // 类新增属性
         public void putField(Id fieldId, Type.T type, Id freshId) {
             if (this.fields.get(fieldId) != null) {
                 error(STR."duplicated class field: \{fieldId}");
@@ -69,9 +73,11 @@ public class ClassTable {
     }
 
     // map each class, to its corresponding class binding.
+    // class Id -> class Binding -> Class.T
     private final java.util.HashMap<Id, Binding> classTable;
 
     public ClassTable() {
+        // 构造函数初始化一个 映射表
         this.classTable = new java.util.HashMap<>();
     }
 
@@ -140,7 +146,12 @@ public class ClassTable {
 
     // lab 2, exercise 7:
     public void dump() {
-        throw new Todo();
+        // throw new Todo();
+        for (Id key : this.classTable.keySet()) {
+            Binding binding = this.classTable.get(key);
+            System.out.println(STR."========\{key}:");
+            binding.toString();
+        }
     }
 
     @Override

@@ -3,6 +3,7 @@ package ast;
 import ast.Ast.*;
 import ast.Ast.Exp.*;
 import ast.Ast.Stm.Assign;
+import ast.Ast.Stm.While;
 import ast.Ast.Stm.If;
 import ast.Ast.Stm.Print;
 import util.Id;
@@ -141,8 +142,56 @@ public class SamplePrograms {
     // Lab2, exercise 2: you should write some code to
     // encode the program "test/Sum.java".
     // Your code here:
-    public static Program.T progSum = null;
+    // public static Program.T progSum = null;
+    static MainClass.T sum = new MainClass.Singleton(
+            Id.newName("Sum"),
+            new AstId(Id.newName("a")),
+            new Print(new Call(new NewObject(Id.newName("Doit")),
+                    new AstId(Id.newName("doit")),
+                    List.of(new Num(101)),
+                    new Tuple.One<>(),
+                    new Tuple.One<>()))
+    );
 
+    static ast.Ast.Class.T doit = new Ast.Class.Singleton(
+            Id.newName("Doit"),
+            null,
+            List.of(),
+            // 方法声明
+            List.of(new Method.Singleton(
+                    Type.getInt(),
+                    new AstId(Id.newName("doit")),
+                    // 形参列表
+                    List.of(new Dec.Singleton(Type.getInt(), new AstId(Id.newName("n")))),
+                    // 变量声明语句
+                    List.of(new Dec.Singleton(Type.getInt(), new AstId(Id.newName("sum"))),
+                            new Dec.Singleton(Type.getInt(), new AstId(Id.newName("i")))),
+                    // statements 列表
+                    List.of(new Assign(new AstId(Id.newName("i")), new Num(0)),
+                            new Assign(new AstId(Id.newName("sum")), new Num(0)),
+                            new While(
+                                    // 条件 cond
+                                    new Bop(
+                                            new ExpId(new AstId(Id.newName("i"))),
+                                            "<",
+                                            new ExpId(new AstId(Id.newName("n")))),
+                                    new Assign(
+                                            new AstId(Id.newName("sum")),
+                                            new Bop(
+                                                    new ExpId(new AstId(Id.newName("sum"))),
+                                                    "+",
+                                                    new ExpId(new AstId(Id.newName("i")))
+                                            )
+                                    )
+                            )
+                    ),
+                    // 返回值
+                    new ExpId(new AstId(Id.newName("sum")))
+            )),
+            new Tuple.One<>()
+    );
+
+    public static Program.T progSum = new Program.Singleton(sum, List.of(doit));
 
 }
 

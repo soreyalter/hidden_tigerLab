@@ -85,7 +85,33 @@ public class PrettyPrinter {
                 ppExp(right);
             }
             case Exp.This() -> sayLocal("this");
-            default -> throw new Todo();
+            // ExpId, Call, NewObject, Num, Bop, This
+            case Exp.True() -> sayLocal("true");
+            case Exp.False() -> sayLocal("false");
+            case Exp.ArraySelect(Exp.T array, Exp.T index) -> {
+                ppExp(array);
+                sayLocal(STR."[\{index}]");
+            }
+            case Exp.BopBool(Exp.T left, String op, Exp.T right) -> {
+                ppExp(left);
+                sayLocal(STR." \{op} ");
+                ppExp(right);
+            }
+            case Exp.Length(Exp.T array) ->{
+                ppExp(array);
+                sayLocal(".length");
+            }
+            case Exp.NewIntArray(Exp.T num) -> {
+                sayLocal("new int [");
+                ppExp(num);
+                sayLocal("]");
+            }
+
+            default -> {
+                // throw new Todo();
+                System.out.println("Error: print Exp failed.");
+                // exit(-1);
+            }
         }
     }
 
@@ -124,7 +150,37 @@ public class PrettyPrinter {
                 ppExp(exp);
                 sayLocal(";\n");
             }
-            default -> throw new Todo();
+            case Stm.AssignArray(AstId id, Exp.T index, Exp.T exp) -> {
+                // id[exp] = exp;
+                say("");
+                ppAstId(id);
+                sayLocal("[");
+                ppExp(index);
+                sayLocal("] = ");
+                ppExp(exp);
+                sayLocal(";\n");
+            }
+            case Stm.Block(List<Stm.T> stms) -> {
+                for (Stm.T stm : stms) {
+                    ppStm(stm);
+                }
+            }
+            case Stm.While(Exp.T cond, Stm.T body) -> {
+                // while (cond) {
+                //     body
+                // }
+                say("while (");
+                ppExp(cond);
+                sayLocal(") {\n");
+                indent();
+                ppStm(body);
+                unIndent();
+                sayln("}");
+            }
+            default -> {
+                // throw new Todo();
+                System.out.println("Error: print Stm failed.");
+            }
         }
     }
 
@@ -132,12 +188,20 @@ public class PrettyPrinter {
     public void ppType(Type.T t) {
         switch (t) {
             case Type.Int() -> sayLocal("int");
-            default -> throw new Todo();
+            case Type.Boolean() -> sayLocal("boolean");
+            case Type.IntArray() -> sayLocal("int[]");
+            case Type.ClassType(Id id) -> sayLocal(STR."class \{id}");
+            default -> {
+                // throw new Todo();
+                System.out.println("Error: print Type failed.");
+            }
         }
     }
 
     // dec
     public void ppDec(Dec.T dec) {
+        // 只有这一种类型，所以直接用类型转换
+        // 而不是 switch case 语句
         Dec.Singleton d = (Dec.Singleton) dec;
         ppType(d.type());
         sayLocal(" ");
@@ -146,21 +210,27 @@ public class PrettyPrinter {
 
     // method
     public void ppMethod(Method.T mtd) {
+        // 签名
         Method.Singleton m = (Method.Singleton) mtd;
         this.say("public ");
         ppType(m.retType());
         this.sayLocal(" ");
         ppAstId(m.methodId());
         this.sayLocal(STR."(");
+        // 这样写会有额外的一个逗号
         m.formals().forEach(x -> {
             ppDec(x);
             sayLocal(", ");
         });
+
         this.sayLocal("){\n");
+
+        // 方法体
         indent();
         m.locals().forEach(x -> {
             this.say("");
             ppDec(x);
+            // 声明语句块后会有个空行
             this.sayLocal(";\n");
         });
         this.sayln("");

@@ -44,6 +44,7 @@ public class MethodTable {
         }
     }
 
+
     // return null for non-existing keys
     public Tuple.Two<Type.T, Id> get(Id id) {
         return this.table.get(id);
@@ -51,7 +52,9 @@ public class MethodTable {
 
     // lab 2, exercise 7:
     public void dump() {
-        throw new Todo();
+        // throw new Todo();
+        System.out.println("<MethodId -- Type -- freshId");
+        System.out.println(this.table);
     }
 
     @Override

@@ -20,6 +20,10 @@ public class Compiler {
     HashSet<String> ids;
     StringBuffer buf;
 
+    /**
+     * 存储传入的编译指令 s 到 String 缓冲区 buf 中
+     * @param s 编译指令
+     */
     private void emit(String s) {
         buf.append(s);
     }
@@ -33,14 +37,41 @@ public class Compiler {
                     String op,
                     Exp.T right
             ) -> {
+                /*
+                若表达式为 5 + 3，应该生成的编译指令如下
+                movq    $5, %rax        ; 将数字5加载到寄存器 %rax 中
+                pushq   %rax            ; 将 %rax 中的值压入堆栈
+                movq    $3, %rax        ; 将数字3加载到寄存器 %rax 中
+                popq    %rdx            ; 将堆栈中的值弹出到寄存器 %rdx 中
+                addq    %rdx, %rax      ; 将 %rdx 中的值加到 %rax 中，结果存储在 %rax 中
+                */
                 compileExp(left);
                 emit("\tpushq\t%rax\n");
                 compileExp(right);
                 emit("\tpopq\t%rdx\n");
+                // rax: right, rdx: left
                 switch (op) {
+                    // dst += src
                     case "+" -> emit("\taddq\t%rdx, %rax\n");
+                    // dst *= src
                     case "*" -> emit("\timulq\t%rdx\n");
-                    default -> throw new Todo(op);
+                    // dst <- dst - src(rdx)
+                    case "-" -> emit("\tsubq\t%rax, %rdx\n");
+                    /*
+                    idivq S：signed divide
+                    R[%rdx] <- R[%rdx]:R[%rax] mod S
+                    R[%rax] <- R[%rdx]:R[%rax] / S
+                    */
+                    case "/" -> {
+                        // 把除数转存到%rbx
+                        emit("\tmovq\t%rax\t%rbx\n");
+                        // 把被除数移动到%rax以供扩展位数
+                        emit("\tmovq\t%rdx\t%rax\n");
+                        emit("\tcqto\n");
+                        // 带符号除法，%rdx:%rax / %rbx
+                        emit("\tidivq\t%rbx\n");
+                        // 结果存在%rax，余数在%rdx
+                    }
                 }
             }
             case Eseq(

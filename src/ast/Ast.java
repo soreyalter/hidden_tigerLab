@@ -57,7 +57,9 @@ public class Ast {
         }
 
         // singleton design pattern
-        private static final Type.T boolTy = new IntArray();
+        // private static final Type.T boolTy = new IntArray();
+        private static final Type.T boolTy = new Boolean();
+        // 这里是不是写错了？
         private static final Type.T intTy = new Int();
         private static final Type.T intArrayTy = new IntArray();
         private static final HashMap<Id, Type.T> classTyContainer = new HashMap<>();
@@ -92,8 +94,10 @@ public class Ast {
         public static void output(Type.T ty) {
             switch (ty) {
                 case Type.Boolean() -> System.out.println("boolean");
-                case Type.Int() -> System.out.print("int");
-                default -> throw new Todo();
+                case Type.Int() -> System.out.println("int");
+                // default -> throw new Todo();
+                case Type.ClassType(Id id) -> System.out.println(id);
+                case Type.IntArray() -> System.out.println("int[]");
             }
         }
 
@@ -105,7 +109,13 @@ public class Ast {
                 case Type.Int() -> {
                     return "int";
                 }
-                default -> throw new Todo();
+                // default -> throw new Todo();
+                case Type.IntArray() -> {
+                    return "int[]";
+                }
+                case Type.ClassType(Id id) -> {
+                    return id.toString();
+                }
             }
         }
     }
@@ -117,6 +127,7 @@ public class Ast {
                 permits Singleton {
         }
 
+        // type aid ;
         public record Singleton(Type.T type,
                                 AstId aid) implements T {
         }
@@ -140,7 +151,7 @@ public class Ast {
                 False, Length, NewIntArray, NewObject, Num, This, True, Uop {
         }
 
-        // ArraySelect
+        // ArraySelect, array[index]
         public record ArraySelect(T array,
                                   T index) implements T {
         }
@@ -151,7 +162,7 @@ public class Ast {
                           T right) implements T {
         }
 
-        // op is a boolean operator
+        // op is a boolean operator: and "&", or "|", "^"
         public record BopBool(T left,
                               String op,
                               T right) implements T {
