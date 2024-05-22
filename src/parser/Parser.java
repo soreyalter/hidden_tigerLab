@@ -4,13 +4,21 @@ import ast.Ast;
 import ast.PrettyPrinter;
 import lexer.Lexer;
 import lexer.Token;
-import slp.Slp;
-import util.Todo;
+import ast.Ast.Exp.ExpId;
+import util.Id;
 import util.Trace;
 
-import javax.print.attribute.standard.PrinterLocation;
 import java.io.BufferedInputStream;
 import java.io.FileInputStream;
+import java.lang.classfile.ClassSignature;
+import java.util.LinkedList;
+import ast.Ast.Exp.T;
+import ast.Ast.Stm;
+import ast.Ast.Class;
+import ast.Ast.Exp;
+import util.Tuple;
+import ast.Ast.Type;
+import ast.Ast.Dec;
 
 import static java.lang.System.*;
 
@@ -20,7 +28,9 @@ public class Parser {
     Lexer lexer;
     Token current;
     private boolean isSpecial = false;
+    private boolean isField = true;
     private Token currentNext;
+    private Ast.Type.T currentType = null;
 
     public Parser(String fileName) {
         this.inputFileName = fileName;
@@ -46,6 +56,7 @@ public class Parser {
         System.out.println(STR."Error: \{errMsg}, compilation aborting...\n");
         exit(1);
     }
+    // Function for debug
     private void printID(String msg) {
         System.out.println(STR."\{msg}\n");
     }
@@ -60,16 +71,17 @@ public class Parser {
     // ->
     // ExpRest -> , Exp
     // Exp, Exp, ...
-    private void parseExpList() {
+    private LinkedList<T> parseExpList() {
+        LinkedList<T> args = new LinkedList<T>();
         if (current.kind.equals(Token.Kind.RPAREN))
             // Exp )
-            return;
-        parseExp();
+            return args;
+        args.add(parseExp());
         while (current.kind.equals(Token.Kind.COMMA)) {
             advance();
-            parseExp();
+            args.add(parseExp());
         }
-        return;
+        return args;
     }
 
     // AtomExp -> (exp)
@@ -81,47 +93,69 @@ public class Parser {
     // -> new int [exp]
     // -> new id ()
     // 只有 new，(exp)两种情况要讨论，其他全部直接返回
-    private void parseAtomExp() {
+    private Exp.T parseAtomExp() {
+        Exp.T exp = null;
+        String s;
+        int i;
+
         switch (current.kind) {
             case LPAREN:
                 advance();
-                parseExp();
+                exp = parseExp();
                 eatToken(Token.Kind.RPAREN);
-                printID(STR."========  parseAtomExp after eatToken), current -> \{current.kind} =========");
-                return;
-            case ID, FALSE, TRUE, NUM, THIS:
+                return exp;
+            case ID:
+                s = current.lexeme;
                 advance();
-                return;
+                return new ExpId(new Ast.AstId(Id.newName(s)));
+            case FALSE:
+                advance();
+                return new Exp.False();
+            case TRUE:
+                advance();
+                return new Exp.True();
+            case NUM:
+                i = Integer.parseInt(current.lexeme);
+                advance();
+                return new Exp.Num(i);
+            case THIS:
+                advance();
+                return new Exp.This();
             case SUB:
                 advance();
                 if (current.kind == Token.Kind.NUM) {
+                    int j = Integer.parseInt(current.lexeme);
+                    i = -j;
                     advance();
-                    return;
+                    return new Exp.Num(i);
                 } else {
                     error(STR."Error: got \{current.kind}");
                 }
-                return;
+                // return;
             case NEW:
                 advance();
                 switch (current.kind) {
                     case INT:
+                        // new int [exp]
                         advance();
                         eatToken(Token.Kind.LBRACKET);
-                        parseExp();
+                        exp = parseExp();
                         eatToken(Token.Kind.RBRACKET);
-                        return;
+                        return new Exp.NewIntArray(exp);
                     case ID:
+                        // new A()
+                        s = current.lexeme;
                         advance();
                         eatToken(Token.Kind.LPAREN);
                         eatToken(Token.Kind.RPAREN);
-                        return;
+                        return new Exp.NewObject(Id.newName(s));
                     default:
                         // throw new Todo();
                         error("in parseAtomExp");
                 }
             default:
                 error("parseAtomExp failed");
-                return;
+                return exp;
         }
     }
 
@@ -130,8 +164,9 @@ public class Parser {
     // -> AtomExp [exp]
     // -> AtomExp .length
     // 可以被取“非”的表达式
-    private void parseNotExp() {
-        parseAtomExp();
+    private Exp.T parseNotExp() {
+        Exp.T exp;
+        exp = parseAtomExp();
         if (current.kind == Token.Kind.DOT ||
                 current.kind == Token.Kind.LBRACKET) {
             if (current.kind == Token.Kind.DOT) {
@@ -139,97 +174,113 @@ public class Parser {
                 if (current.kind == Token.Kind.LENGTH) {
                     // .length
                     advance();
-                    return;
+                    return new Exp.Length(exp);
                 }
                 // .id(expList)
+                String s = current.lexeme;
                 eatToken(Token.Kind.ID);
                 eatToken(Token.Kind.LPAREN);
-                parseExpList();
+                LinkedList<T> args = parseExpList();
                 eatToken(Token.Kind.RPAREN);
-                return;
+                return new Exp.Call(exp,
+                        new Ast.AstId(Id.newName(s)),
+                        args,
+                        new Tuple.One<>(), // 声明类型
+                        new Tuple.One<>());             // 实际返回类型
             } else {
                 // [exp]
+                Exp.T t = (ExpId) exp;
                 eatToken(Token.Kind.LBRACKET);
-                parseExp();
+                exp = parseExp();
                 eatToken(Token.Kind.RBRACKET);
-                return;
+                return new Exp.ArraySelect(t, exp);
             }
         }
-        printID(STR."======== parseNotExp return, current -> \{current.kind} =========");
-        return;
+        return exp;
     }
 
     // TimesExp -> ! TimesExp
     // -> NotExp
-    private void parseTimesExp() {
+    private Exp.T parseTimesExp() {
         // throw new Todo();
-        if (current.kind != Token.Kind.NOT){
-            parseNotExp();
-            return;
-        }
+        Exp.T exp = null;
         while (current.kind == Token.Kind.NOT) {
-            advance();  // -> (
-            parseTimesExp();
+            advance();
+            exp = parseTimesExp();
         }
-        return;
+        if (exp != null){
+            return new Exp.Uop("!", exp);
+        } else {
+            exp = parseNotExp();
+        }
+        return exp;
     }
 
     // AddSubExp -> TimesExp * TimesExp
     // -> TimesExp
-    private void parseAddSubExp() {
-        parseTimesExp();
+    private Exp.T parseAddSubExp() {
+        Exp.T left, right = null;
+        left = parseTimesExp();
         // throw new Todo();
         if (current.kind == Token.Kind.TIMES) {
             advance();
-            parseTimesExp();
-            printID(STR."======== parseAddSubExp return, current -> \{current.kind} =========");
-            return;
+            right = parseTimesExp();
+            return new Exp.Bop(left, "*", right);
         }
-        printID(STR."======== parseAddSubExp return, current -> \{current.kind} =========");
-        return;
+        return left;
     }
 
     // LtExp -> AddSubExp + AddSubExp
     // -> AddSubExp - AddSubExp
     // -> AddSubExp
-    private void parseLtExp() {
-        parseAddSubExp();
+    private Exp.T parseLtExp() {
+        Exp.T left, right = null;
+        left = parseAddSubExp();
         // throw new Todo();
         if (current.kind == Token.Kind.ADD
                 || current.kind == Token.Kind.SUB) {
-            advance();
-            parseAddSubExp();
-            return;
-        }
-        printID(STR."======== parseLtExp return, current -> \{current.kind} =========");
+            if (current.kind == Token.Kind.ADD) {
+                advance();
+                right = parseAddSubExp();
+                return new Exp.Bop(left, "+", right);
+            }
+            else {
+                advance();
+                right = parseAddSubExp();
+                return new Exp.Bop(left, "-", right);
+            }
 
-        return;
+        }
+        return left;
     }
 
     // AndExp -> LtExp < LtExp
     // -> LtExp
-    private void parseAndExp() {
-        parseLtExp();
+    private Exp.T parseAndExp() {
+        Exp.T left, right = null;
+        left = parseLtExp();
         // throw new Todo();
         if (current.kind == Token.Kind.LT) {
             advance();
-            parseLtExp();
-            printID(STR."======== parseAndExp return, current -> \{current.kind} =========");
-
-            return;
+            right = parseLtExp();
+            return new Exp.Bop(left, "<", right);
         }
-        return;
+        return left;
     }
 
     // Exp -> AndExp && AndExp
     // -> AndExp
-    private void parseExp() {
-        parseAndExp();
+    private Exp.T parseExp() {
+        Exp.T left, right = null;
+
+        left = parseAndExp();
         // throw new Todo();
         if (current.kind == Token.Kind.AND) {
             advance();
-            parseAndExp();
+            right = parseAndExp();
+            return new Exp.BopBool(left, "&&", right);
         }
+        return left;
     }
 
     // Statement -> { Statement* }
@@ -238,33 +289,36 @@ public class Parser {
     // -> System.out.println ( Exp ) ;
     // -> id = Exp ;
     // -> id [ Exp ]= Exp ;
-    private void parseStatement() {
+    private Stm.T parseStatement() {
+        Exp.T exp;
+        Exp.T condition;
+        LinkedList<Stm.T> stms = new LinkedList<Stm.T>();
+
         // to parse a statement.
         // throw new Todo();
         switch (current.kind) {
             case LBRACE:
+                LinkedList<Stm.T> block = new LinkedList<Stm.T>();
                 advance();
-                parseStatements();
+                block = (LinkedList<ast.Ast.Stm.T>) parseStatements();
                 eatToken(Token.Kind.RBRACE);
-                return;
+                return new Stm.Block(block);
             case IF:
                 advance();
                 eatToken(Token.Kind.LPAREN);
-                // 问题就是这个 parseExp
-                // current -> !
-                parseExp();
+                condition = parseExp();
                 eatToken(Token.Kind.RPAREN);
-                parseStatement();
+                Stm.T thenn = parseStatement();
                 eatToken(Token.Kind.ELSE);
-                parseStatement();
-                return;
+                Stm.T elsee =  parseStatement();
+                return new Stm.If(condition, thenn, elsee);
             case WHILE:
                 advance();
                 eatToken(Token.Kind.LPAREN);
-                parseExp();
+                exp = parseExp();
                 eatToken(Token.Kind.RPAREN);
-                parseStatement();
-                return;
+                Stm.T body = parseStatement();
+                return new Stm.While(exp, body);
             case SYSTEM:
                 advance();
                 eatToken(Token.Kind.DOT);
@@ -272,36 +326,37 @@ public class Parser {
                 eatToken(Token.Kind.DOT);
                 eatToken(Token.Kind.PRINTLN);
                 eatToken(Token.Kind.LPAREN);
-                parseExp();
+                exp = parseExp();
                 eatToken(Token.Kind.RPAREN);
                 eatToken(Token.Kind.SEMI);
-                return;
+                return new Stm.Print(exp);
             case ID:
+                String id = current.lexeme;
                 if (isSpecial) {
-                    // printID("========= special =============");
                     // 这是混进变量声明中的表达式statement走的支线，此时 current.kind = id，
                     // 但是nextToken 得到的是 = 或者 [ 后的那个 token
                     // currentNext 记录了 id 后面的 token是 = 还是 [
                     current = currentNext;
                     // 浅拷贝和深拷贝导致的
-                    printID("+++++++++++++++++next: "+ currentNext.toString());
-                    printID("+++++++++++++++++current: "+ current.toString());
                     switch (current.kind){
                         case ASSIGN:
+                            // id = exp;
                             advance();
-                            parseExp();
+                            exp = parseExp();
                             // 处理完把标志位恢复
                             eatToken(Token.Kind.SEMI);
                             isSpecial = false;
-                            return;
+                            return new Stm.Assign(new Ast.AstId(Id.newName(id)), exp);
                         case LBRACKET:
+                            // id [index] = exp;
                             advance();
-                            parseExp();
+                            Exp.T index = parseExp();
                             eatToken(Token.Kind.RBRACKET);
                             eatToken(Token.Kind.ASSIGN);
-                            parseExp();
+                            exp = parseExp();
+                            eatToken(Token.Kind.SEMI);
                             isSpecial = false;
-                            return;
+                            return new Stm.AssignArray(new Ast.AstId(Id.newName(id)), index, exp);
                     }
 
                 }
@@ -310,29 +365,35 @@ public class Parser {
                     if (current.kind == Token.Kind.ASSIGN) {
                         // id = exp ;
                         advance();
-                        parseExp();
+                        exp = parseExp();
                         eatToken(Token.Kind.SEMI);
-                        return;
+                        return new Stm.Assign(new Ast.AstId(Id.newName(id)), exp);
                     }
                     else if (current.kind == Token.Kind.LBRACKET) {
                         // id [Exp] = Exp ;
                         advance();
-                        parseExp();
+                        Exp.T index = parseExp();
                         eatToken(Token.Kind.RBRACKET);
                         eatToken(Token.Kind.ASSIGN);
-                        parseExp();
+                        exp = parseExp();
                         eatToken(Token.Kind.SEMI);
-                        return;
+                        return new Stm.AssignArray(new Ast.AstId(Id.newName(id)), index, exp);
                     }
-                    else error(STR."parse statement failed in case ID, got \{current.kind}");
+                    else {
+                        error(STR."parse statement failed in case ID, got \{current.kind}");
+                        return null;
+                    }
                 }
-            default: error("parse statement failed, no token matched");
+            default:
+                error("parse statement failed, no token matched");
+                return null;
         }
     }
 
     // Statements -> Statement Statements
     // ->
-    private void parseStatements() {
+    private LinkedList<Stm.T> parseStatements() {
+        LinkedList<Stm.T> stms = new LinkedList<Stm.T>();
         // throw new Todo();
         while (current.kind == Token.Kind.LBRACE
                 || current.kind == Token.Kind.IF
@@ -340,8 +401,9 @@ public class Parser {
                 || current.kind == Token.Kind.SYSTEM
                 || current.kind == Token.Kind.ID) {
             // 这些开头的都是 statement，否则不是，停止继续解析
-            parseStatement();
+            stms.add(parseStatement());
         }
+        return stms;
     }
 
     // Type -> int []
@@ -349,7 +411,7 @@ public class Parser {
     // -> int
     // -> id
     // 这里id指的是类名
-    private void parseType() {
+    private Type.T parseType() {
         // to parse a type.
         // throw new Todo();
         switch (current.kind) {
@@ -359,37 +421,49 @@ public class Parser {
                     // int []
                     eatToken(Token.Kind.LBRACKET);
                     eatToken(Token.Kind.RBRACKET);
-                    return;
+                    // currentType = Type.getIntArray();
+                    return Type.getIntArray();
                 }
                 else {
                     // int
-                    return;
+                    // currentType = Type.getInt();
+                    // printID("*********"+current.toString()); -> doit
+                    // printID(Type.convertString(Type.getInt())); -> int
+                    return Type.getInt();
                 }
             case BOOLEAN:
                 advance();
-                return;
+                // currentType = Type.getBool();
+                return Type.getBool();
             case ID:
+                String s = current.lexeme;
                 advance();
-                return;
+                // currentType = new Type.ClassType(Id.newName(s));
+                // currentType = Type.getClassType(Id.newName(s));
+                return Type.getClassType(Id.newName(s));
             default:
                 error(STR."parseType failed, got \{current.kind}");
+                return null;
         }
     }
 
     // VarDecl -> Type id ;
     // id id ;
-    private void parseVarDecl() throws Exception {
+    private Dec.Singleton parseVarDecl() throws Exception {
         // to parse the "Type" non-terminal in this method,
         // instead of writing a fresh one.
-        parseType();
+        Type.T type =  parseType();
+        String id = current.lexeme;
+        Ast.Dec.Singleton dec = new Ast.Dec.Singleton(type, new Ast.AstId(Id.newName(id)));
         eatToken(Token.Kind.ID);
         eatToken(Token.Kind.SEMI);
-        return;
+        return dec;
     }
 
     // VarDecls -> VarDecl VarDecls
     // ->
-    private void parseVarDecls() throws Exception {
+    private LinkedList<Dec.T> parseVarDecls() throws Exception {
+        LinkedList<Dec.T> decs = new LinkedList<Dec.T>();
         // throw new util.Todo();
         // 注意一种情况：int i; i = 3;
         // 循环到第二个语句时由于 i 是 ID，可以进入循环导致 赋值语句 被 parseVarDecl 解析
@@ -399,7 +473,7 @@ public class Parser {
             // 这里 while 判断 type 的三种类型，但 id 必须是 class 才行
             if (current.kind != Token.Kind.ID) {
                 // boolean or int
-                parseVarDecl();
+                decs.add(parseVarDecl());
             }
             else {
                 // current.kind = ID
@@ -411,6 +485,7 @@ public class Parser {
                 // 用 currentNext 记录一下现在是 = 还是 [
 
                 // 试探一下下面是 id, 还是别的东西
+                String id = current.lexeme; // classType
                 advance();
                 if (current.kind != Token.Kind.ID){
                     // 不是变量声明
@@ -419,109 +494,179 @@ public class Parser {
                     current = new Token(Token.Kind.ID, currentNext.rowNum, currentNext.colNum);
                     isSpecial = true;
                     // 此时已经不是声明语句，直接结束 parseVarDecls 的解析
-                    return;
+                    return decs;
                 }
                 else {
                     // 若是还是id，说明还是声明语句，但此时 parser 已经到了 id id ; 中的第二个id处
                     // 省个调用栈直接在这解析剩下的，也可以去 parseVarDecl 里面处理，同样用 isSpecial 判断
+                    String s = current.lexeme;
                     eatToken(Token.Kind.ID);
                     eatToken(Token.Kind.SEMI);
+                    Type.T type = new Type.ClassType(Id.newName(id));
+                    decs.add(new Dec.Singleton(type, new Ast.AstId(Id.newName(s))));
                     // 继续循环
                 }
             }
         }
-        //        return;
+        return decs;
     }
 
     // FormalList -> Type id FormalRest*
     // ->
     // FormalRest -> , Type id
     // 唯一一个，可能在执行结束后，current不指向下一个token的函数
-    // 因为eat 左括号后，当前可能是形参，也可能是右括号，是右括号的话直接返回给 methodDecl 中的eatToken
-    private void parseFormalList() {
+    // 因为 eat '(' 后，当前可能是形参，也可能是右括号，是右括号的话直接返回给 methodDecl 中的eatToken ')'
+    private LinkedList<Dec.T> parseFormalList() {
+        LinkedList<Dec.T> formals = new LinkedList<Dec.T>();
+        Type.T type;
+        String id;
         // throw new Todo();
-        if (current.kind == Token.Kind.RPAREN) {
-            // advance();
-            return;
-        }
-        while (current.kind == Token.Kind.INT
+        // if (current.kind == Token.Kind.RPAREN) {
+        //     // advance();
+        //     return formals;
+        // }
+        // while (current.kind == Token.Kind.INT
+        //         || current.kind == Token.Kind.BOOLEAN
+        //         || current.kind == Token.Kind.ID) {
+        //     type = parseType();
+        //     id = current.lexeme;
+        //     eatToken(Token.Kind.ID);
+        //     formals.add(new Dec.Singleton(type, new Ast.AstId(Id.newName(id))));
+        //     if (current.kind == Token.Kind.COMMA) {
+        //         // eatToken(Token.Kind.COMMA);
+        //         advance();
+        //     }
+        //     // 在这里 return 可以在 while 外面写报错信息
+        //     else {
+        //         // 正常来说这里 current = )
+        //         return formals;
+        //     }
+        // }
+        // error(STR."parseFormalList fail, got \{current.kind}");
+
+        // 另一种写法
+        if (current.kind == Token.Kind.INT
                 || current.kind == Token.Kind.BOOLEAN
                 || current.kind == Token.Kind.ID) {
-            parseType();
+            type = parseType();
+            id = current.lexeme;
             eatToken(Token.Kind.ID);
-            if (current.kind == Token.Kind.COMMA) {
-                // eatToken(Token.Kind.COMMA);
+            formals.add(new Dec.Singleton(type, new Ast.AstId(Id.newName(id))));
+            while (current.kind == Token.Kind.COMMA) {
                 advance();
-            }
-            // 在这里 return 可以在 while 外面写报错信息
-            else {
-                // 正常来说这里 current = )
-                return;
+                type = parseType();
+                id = current.lexeme;
+                eatToken(Token.Kind.ID);
+                formals.add(new Dec.Singleton(type, new Ast.AstId(Id.newName(id))));
             }
         }
-        error(STR."parseFormalList fail, got \{current.kind}");
+        // 如果是没有形参的情况，此时 formals 是一个空列表
+        return formals;
     }
 
     // Method -> public Type id ( FormalList )
     // { VarDecl* Statement* return Exp ;}
-    private void parseMethod() throws Exception {
+    private Ast.Method.T parseMethod() throws Exception {
         // to parse a method.
         // throw new Todo();
+        Type.T reType;
+        String id;
+        LinkedList<Dec.T> formals;
+        LinkedList<Dec.T> locals;
+        LinkedList<Stm.T> stms;
+        Exp.T retExp;
+
         eatToken(Token.Kind.PUBLIC);
-        parseType();
+        reType = parseType();
+        // printID(Type.convertString(reType)); -> int
+        // out.println(reType); -> int[]
+        id = current.lexeme;    // 函数名
         eatToken(Token.Kind.ID);
         eatToken(Token.Kind.LPAREN);    // (
-        parseFormalList();
+        formals = parseFormalList();
         eatToken(Token.Kind.RPAREN);    // )
         eatToken(Token.Kind.LBRACE);    // {
-        parseVarDecls();
-        parseStatements();
+        locals = parseVarDecls();
+        stms =  parseStatements();
         eatToken(Token.Kind.RETURN);
-        parseExp();
+        retExp = parseExp();
         eatToken(Token.Kind.SEMI);
         eatToken(Token.Kind.RBRACE);    // }
+        return new Ast.Method.Singleton(reType,
+                new Ast.AstId(Id.newName(id)),
+                formals,
+                locals,
+                stms,
+                retExp);
     }
 
     // MethodDecls -> MethodDecl MethodDecls
     // ->
-    private void parseMethodDecls() throws Exception {
+    private LinkedList<Ast.Method.T> parseMethodDecls() throws Exception {
         // throw new util.Todo();
+        LinkedList<Ast.Method.T> methods = new LinkedList<Ast.Method.T>();
         while (current.kind == Token.Kind.PUBLIC) {
-            parseMethod();
+            isField = false;
+            Ast.Method.T ms = parseMethod();
+            methods.add(ms);
         }
+        isField = true;
+        return methods;
     }
 
     // ClassDecl -> class id { VarDecl* MethodDecl* }
     // -> class id extends id { VarDecl* MethodDecl* }
-    private void parseClassDecl() throws Exception {
+    private Class.T parseClassDecl() throws Exception {
+        String id;
+        String extendss = null;
+        LinkedList<Dec.T> decs = new LinkedList<>();
+        LinkedList<Ast.Method.T> methods = new LinkedList<>();
+        // Tuple.One<Class.T> parentClass =  new Tuple.One<Class.T>();
+
         eatToken(Token.Kind.CLASS);
+        id = current.lexeme;
         eatToken(Token.Kind.ID);
         // throw new util.Todo();
         if (current.kind == Token.Kind.LBRACE) {
             advance();
-            parseVarDecls();
-            // parseVarDecls 已完成
-            parseMethodDecls();
+
+            decs = parseVarDecls();
+            methods = parseMethodDecls();
             eatToken(Token.Kind.RBRACE);
+            return new Class.Singleton(Id.newName(id),
+                    null,
+                    decs,
+                    methods,
+                    new Tuple.One<>(null));
         }
         else if (current.kind == Token.Kind.EXTENDS) {
             advance();
+            extendss = current.lexeme;
             eatToken(Token.Kind.ID);
             eatToken(Token.Kind.LBRACE);
-            parseVarDecls();
-            parseMethodDecls();
+
+            decs = parseVarDecls();
+            methods = parseMethodDecls();
             eatToken(Token.Kind.RBRACE);
+            return new Class.Singleton(Id.newName(id),
+                    Id.newName(extendss),
+                    decs,
+                    methods,
+                    new Tuple.One<>());
         }
         else error(STR."parseClassDecl fail, got \{current.kind}");
+        return null;
     }
 
     // ClassDecls -> ClassDecl ClassDecls
     // ->
-    private void parseClassDecls() throws Exception {
+    private LinkedList<Class.T> parseClassDecls() throws Exception {
+        LinkedList<Class.T> classes = new LinkedList<>();
         while (current.kind.equals(Token.Kind.CLASS)) {
-            parseClassDecl();
+            Class.T sc = parseClassDecl();
+            classes.add(sc);
         }
-        return;
+        return classes;
     }
 
     // MainClass -> class id {
@@ -529,12 +674,18 @@ public class Parser {
     //     Statement
     //   }
     // }
-    private void parseMainClass() {
+    private Ast.MainClass.Singleton parseMainClass() {
         // Lab 1. Exercise 11: Fill in the missing code
         // to parse a main class as described by the
         // grammar above.
         // throw new Todo();
+
+        String id;
+        String arg;
+        Stm.T stm;
+
         eatToken(Token.Kind.CLASS);
+        id = current.lexeme;
         eatToken(Token.Kind.ID);
         eatToken(Token.Kind.LBRACE);    // {
         eatToken(Token.Kind.PUBLIC);
@@ -545,30 +696,34 @@ public class Parser {
         eatToken(Token.Kind.STRING);
         eatToken(Token.Kind.LBRACKET);
         eatToken(Token.Kind.RBRACKET);
+        arg = current.lexeme;
         eatToken(Token.Kind.ID);
         eatToken(Token.Kind.RPAREN);    // )
         eatToken(Token.Kind.LBRACE);    // {
         // error("eatToken LBRACE done");
-        parseStatement();
+        stm = parseStatement();
         // error("parseStatement done");
         eatToken(Token.Kind.RBRACE);    // }
         eatToken(Token.Kind.RBRACE);    // }
-
+        return new Ast.MainClass.Singleton(Id.newName(id), new Ast.AstId(Id.newName(arg)), stm);
     }
 
     // Program -> MainClass ClassDecl*
     private Ast.Program.T parseProgram(Object obj){
-        try {
-            parseMainClass();
+        Ast.MainClass.Singleton mainClass;
+        LinkedList<Class.T> classes;
 
-            parseClassDecls();
+        try {
+            mainClass = parseMainClass();
+
+            classes = parseClassDecls();
             eatToken(Token.Kind.EOF);
         }
         catch (Exception e) {
             e.printStackTrace();
             return null;
         }
-        return null;
+        return new Ast.Program.Singleton(mainClass, classes);
     }
 
     private void initParser() {

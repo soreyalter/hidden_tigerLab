@@ -33,7 +33,7 @@ public class Id {
     // "id" without original names
     public static Id newNoname() {
         Id id = new Id();
-        allIds.put(id.toString(), id);
+        allIds.put(id.toString(), id);  // %x_1 -> id(counter = 1, origName = null, new plist)
         return id;
     }
 
