@@ -25,6 +25,7 @@ public class Control {
     static List<String> tracedMethods = new LinkedList<>();
 
     public static boolean beingTraced(String method) {
+        System.out.println(tracedMethods.toString());
         return tracedMethods.contains(method);
     }
 
@@ -35,7 +36,7 @@ public class Control {
 
     // dot-related
     public static class Dot {
-        public static boolean keep = false;
+        public static boolean keep = true;
         public static String format = "png";
         public static List<String> irs = new LinkedList<>();
 

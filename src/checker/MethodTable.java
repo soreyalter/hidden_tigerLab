@@ -33,6 +33,7 @@ public class MethodTable {
         }
 
         for (Dec.T dec : locals) {
+            // type aid
             Dec.Singleton decc = (Dec.Singleton) dec;
             Ast.AstId aid = decc.aid();
             Id freshId = aid.genFreshId();

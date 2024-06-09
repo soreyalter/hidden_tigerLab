@@ -107,7 +107,9 @@ public class Parser {
             case ID:
                 s = current.lexeme;
                 advance();
-                return new ExpId(new Ast.AstId(Id.newName(s)));
+                Ast.AstId aid = new Ast.AstId(Id.newName(s));
+                aid.type = this.currentType;
+                return new ExpId(aid);
             case FALSE:
                 advance();
                 return new Exp.False();
@@ -182,8 +184,10 @@ public class Parser {
                 eatToken(Token.Kind.LPAREN);
                 LinkedList<T> args = parseExpList();
                 eatToken(Token.Kind.RPAREN);
+                Ast.AstId methodAid = new Ast.AstId(Id.newName(s));
+                // methodAid.type = currentType; 方法没有类型
                 return new Exp.Call(exp,
-                        new Ast.AstId(Id.newName(s)),
+                        methodAid,
                         args,
                         new Tuple.One<>(), // 声明类型
                         new Tuple.One<>());             // 实际返回类型
@@ -346,6 +350,7 @@ public class Parser {
                             // 处理完把标志位恢复
                             eatToken(Token.Kind.SEMI);
                             isSpecial = false;
+                            // TODO: 搞清楚这个 id 的 type
                             return new Stm.Assign(new Ast.AstId(Id.newName(id)), exp);
                         case LBRACKET:
                             // id [index] = exp;
@@ -356,7 +361,10 @@ public class Parser {
                             exp = parseExp();
                             eatToken(Token.Kind.SEMI);
                             isSpecial = false;
-                            return new Stm.AssignArray(new Ast.AstId(Id.newName(id)), index, exp);
+                            Ast.AstId arrayAid =  new Ast.AstId(Id.newName(id));
+                            // 这个aid肯定是数组类型
+                            arrayAid.type = Type.getIntArray();
+                            return new Stm.AssignArray(arrayAid, index, exp);
                     }
 
                 }
@@ -367,6 +375,7 @@ public class Parser {
                         advance();
                         exp = parseExp();
                         eatToken(Token.Kind.SEMI);
+                        // TODO: figure out the type of id
                         return new Stm.Assign(new Ast.AstId(Id.newName(id)), exp);
                     }
                     else if (current.kind == Token.Kind.LBRACKET) {
@@ -377,7 +386,10 @@ public class Parser {
                         eatToken(Token.Kind.ASSIGN);
                         exp = parseExp();
                         eatToken(Token.Kind.SEMI);
-                        return new Stm.AssignArray(new Ast.AstId(Id.newName(id)), index, exp);
+                        Ast.AstId arrayAid =  new Ast.AstId(Id.newName(id));
+                        // 这个aid肯定是数组类型
+                        arrayAid.type = Type.getIntArray();
+                        return new Stm.AssignArray(arrayAid, index, exp);
                     }
                     else {
                         error(STR."parse statement failed in case ID, got \{current.kind}");
@@ -421,23 +433,22 @@ public class Parser {
                     // int []
                     eatToken(Token.Kind.LBRACKET);
                     eatToken(Token.Kind.RBRACKET);
-                    // currentType = Type.getIntArray();
+                    this.currentType = Type.getIntArray();
                     return Type.getIntArray();
                 }
                 else {
                     // int
-                    // currentType = Type.getInt();
-                    // printID("*********"+current.toString()); -> doit
-                    // printID(Type.convertString(Type.getInt())); -> int
+                    currentType = Type.getInt();
                     return Type.getInt();
                 }
             case BOOLEAN:
                 advance();
-                // currentType = Type.getBool();
+                currentType = Type.getBool();
                 return Type.getBool();
             case ID:
                 String s = current.lexeme;
                 advance();
+                this.currentType = Type.getClassType(Id.newName(s));
                 // currentType = new Type.ClassType(Id.newName(s));
                 // currentType = Type.getClassType(Id.newName(s));
                 return Type.getClassType(Id.newName(s));
@@ -454,7 +465,9 @@ public class Parser {
         // instead of writing a fresh one.
         Type.T type =  parseType();
         String id = current.lexeme;
-        Ast.Dec.Singleton dec = new Ast.Dec.Singleton(type, new Ast.AstId(Id.newName(id)));
+        Ast.AstId aid = new Ast.AstId(Id.newName(id));
+        aid.type = currentType;
+        Ast.Dec.Singleton dec = new Ast.Dec.Singleton(type, aid);
         eatToken(Token.Kind.ID);
         eatToken(Token.Kind.SEMI);
         return dec;
@@ -463,7 +476,7 @@ public class Parser {
     // VarDecls -> VarDecl VarDecls
     // ->
     private LinkedList<Dec.T> parseVarDecls() throws Exception {
-        LinkedList<Dec.T> decs = new LinkedList<Dec.T>();
+        LinkedList<Dec.T> decs = new LinkedList<>();
         // throw new util.Todo();
         // 注意一种情况：int i; i = 3;
         // 循环到第二个语句时由于 i 是 ID，可以进入循环导致 赋值语句 被 parseVarDecl 解析
@@ -744,6 +757,7 @@ public class Parser {
             error("unable to close file");
         }
     }
+
 
     public Ast.Program.T parse() {
 

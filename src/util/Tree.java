@@ -1,5 +1,7 @@
 package util;
 
+import ast.Ast;
+
 import java.util.List;
 import java.util.Vector;
 import java.util.function.BiFunction;
@@ -51,18 +53,32 @@ public class Tree<X> {
     }
 
     public Node lookupNode(X data) {
-        for (Node node : this.allNodes) {
-            if (node.data.equals(data))
+        // 从头到尾线性查找
+        // for (Node node : this.allNodes) {
+        //     if (node.data.equals(data)) {
+        //         return node;
+        //     }
+        // }
+
+        // 反向查找，因为使用add()添加结点会添加到末尾，直接从后面往前找很快
+        for (int i = this.allNodes.size()-1; i >= 0; i--) {
+            Node node = allNodes.get(i);
+            if (node.data.equals(data)) {
                 return node;
+            }
         }
         return null;
     }
 
     public void addEdge(Node from, Node to) {
+        // 父类 -> 子类
         from.children.add(to);
     }
 
     public void addEdge(X from, X to) {
+        // Ast.Class.Singleton fromm = (Ast.Class.Singleton) from;
+        // Ast.Class.Singleton too = (Ast.Class.Singleton) to;
+        // System.out.println(STR."from: \{from.getClassId()}, to: \{to.getClassId()}");
         Node f = this.lookupNode(from);
         Node t = this.lookupNode(to);
 
@@ -73,8 +89,16 @@ public class Tree<X> {
     }
 
     // perform a level-order traversal of the tree.
+
+    /**
+     * 继承树层序遍历 ? 这不对吧这怎么好像是先序遍历
+     * @param node 树的根节点，其内的数据 node.data 是doit 函数的第一个参数
+     * @param doit 二元函数，形参类型分别为 X，Y，返回类型为 Y
+     * @param value doit 的第二个参数
+     * @param <Y> doit 函数的泛型
+     */
     public <Y> void levelOrder(Node node,
-                               BiFunction<X, Y, Y> doit,
+                               BiFunction<X, Y, Y> doit,    // 传入函数：prefixOneClass
                                Y value) {
         Y result = doit.apply(node.data, value);
         for (Node child : node.children) {

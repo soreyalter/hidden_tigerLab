@@ -148,6 +148,7 @@ public class Checker {
         }
         aid.freshId = resultId.second();
         aid.isClassField = isClassField;
+        aid.type = resultId.first();
         return resultId.first();
     }
 
@@ -166,7 +167,7 @@ public class Checker {
             ) -> {
                 // var typeOfTheObject = checkExp(theObject);
                 // theObject 类的classType
-                Type.T  typeOfTheObject = checkExp(theObject);
+                Type.T typeOfTheObject = checkExp(theObject);
                 // theObject 类的Id
                 Id calleeClassId = null;
                 if (Objects.requireNonNull(typeOfTheObject) instanceof Type.ClassType(Id calleeClassId_)) {
