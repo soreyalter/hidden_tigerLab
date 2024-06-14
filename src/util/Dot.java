@@ -28,6 +28,11 @@ public class Dot {
         this.list = new LinkedList<>();
     }
 
+    /**
+     * 生成一条dot图语句 "from -> to" 并添加到dot图的语句列表中
+     * @param from 源结点名
+     * @param to 目的结点名
+     */
     public void insert(String from, String to) {
         this.insert(from, to, "");
     }
@@ -37,21 +42,31 @@ public class Dot {
         this.list.addFirst(new Element(from, to, s));
     }
 
+    /**
+     * 把Dot对象Element列表中的dot图语句写到写缓冲区bw
+     * @param bw 写缓冲
+     * @throws IOException IO异常
+     */
     private void output(BufferedWriter bw) throws IOException {
         for (Element e : list) {
             bw.write(e.toString());
         }
     }
 
+    /**
+     * 生成一个 Dot.name.dot 文件
+     */
     public void toDot() {
         String fileName = STR."\{this.name}.dot";
         try {
             FileWriter fw = new FileWriter(fileName);
             BufferedWriter bw = new BufferedWriter(fw);
+            // dot 图的开头代码
             bw.write(STR."""
                     digraph g{
                     \tsize = "10, 10";
                     \tnode [color=lightblue2, style=filled];""");
+            // 写 element 到写缓冲中
             this.output(bw);
             bw.write("\n}\n\n");
             bw.close();
@@ -64,6 +79,7 @@ public class Dot {
     public void visualize() {
         this.toDot();
         String format = Control.Dot.format;
+        // dot -Tpng -O dotName.dot 读取dotName.dot，输出 dotName.dot.png
         String[] args = {"dot", "-T", format, "-O", STR."\{this.name}.dot"};
         try {
             final class StreamDrainer implements Runnable {
