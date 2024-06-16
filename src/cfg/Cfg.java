@@ -115,7 +115,7 @@ public class Cfg {
                             List<Dec.T> argTypes) implements Serializable {
         }
 
-        public record Singleton(Id name,
+        public record Singleton(Id name,    // current class id
                                 List<Entry> funcTypes) implements T {
         }
         // name,
@@ -226,12 +226,12 @@ public class Cfg {
                 permits Bop, Call, Eid, GetMethod, Int, New, Print, ArraySelect, Length, NewIntArray {
         }
 
-        public record NewIntArray(Id exp) implements T {
+        public record NewIntArray(Id size) implements T {
         }
         public record Length(Id array) implements T {
         }
 
-        // + [a, b, c] -> int
+        // + [a, b, c] -> int, +, -, *, <, &&
         public record Bop(String op,
                           List<Id> operands,
                           Type.T type) implements T {
@@ -297,6 +297,8 @@ public class Cfg {
                 case Print(Id x) -> say(STR."print(\{x.toString()})");
                 // array[index]
                 case ArraySelect(Id array, Id index) -> say(STR."\{array.toString()}[\{index.toString()}]");
+                // new int[size]
+                case NewIntArray(Id size) -> say(STR."new int[\{size.toString()}]");
                 default -> {
                     // throw new Todo(t);
                     say("Error: Exp prettyPrint failed.");
@@ -313,7 +315,9 @@ public class Cfg {
                 permits Assign, AssignArray {
         }
 
-        public record AssignArray(Id array, Exp.T index, Exp.T value) implements T{
+        public record AssignArray(Id array,
+                                  Id index,
+                                  Id value) implements T{
         }
 
 
@@ -331,13 +335,13 @@ public class Cfg {
                     Exp.pp(exp);
                     sayln(";");
                 }
-                case AssignArray(Id array, Exp.T index, Exp.T value) -> {
+                case AssignArray(Id array, Id index, Id value) -> {
                     printSpaces();
-                    say(STR."\{array.toString()}[");
-                    Exp.pp(index);
-                    say(STR."] = ");
-                    Exp.pp(value);
-                    sayln(";");
+                    sayln(STR."\{array.toString()}[\{index.toString()}] = \{value.toString()};");
+                    // Exp.pp(index);
+                    // say(STR."] = ");
+                    // Exp.pp(value);
+                    // sayln(";");
                 }
 
             }

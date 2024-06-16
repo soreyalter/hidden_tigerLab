@@ -445,6 +445,12 @@ struct V_\{clsName} *vptr;
                                 List<Block.T> blocks) implements T {
         }
 
+        /**
+         * 从 func 函数的块列表中返回 label 与传入 label 相同的 block
+         * @param func 被查找的源函数对象
+         * @param label 块唯一标识符
+         * @return func 块列表中的 label 块
+         */
         public static Block.T getBlock(T func, Label label) {
             switch (func) {
                 case Singleton(

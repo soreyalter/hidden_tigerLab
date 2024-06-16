@@ -5,6 +5,7 @@ import control.Control;
 import util.Error;
 import util.*;
 
+import java.lang.classfile.TypeAnnotation;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -48,9 +49,9 @@ public class Munch {
         }
     }
 
-    // generate a move instruction
-    private void genMoveReg2Id(Id dest,
-                               Id reg,
+    // generate a move instruction, movq reg, dest
+    private void genMoveReg2Id(Id dest, // dest -> def
+                               Id reg,  // reg -> use
                                // type of the "dest"
                                X64.Type.T targetType) {
         List<X64.VirtualReg.T> uses = List.of(new X64.VirtualReg.Reg(reg, targetType));
@@ -64,9 +65,9 @@ public class Munch {
         this.currentInstrs.add(instr);
     }
 
-    // generate a move instruction
-    private void genMoveId2Id(Id dest,
-                              Id x,
+    // generate a move instruction, movq x, dest
+    private void genMoveId2Id(Id dest,  // dest -> def
+                              Id x,     // x -> use
                               // type of the "dest"
                               X64.Type.T targetType) {
         List<X64.VirtualReg.T> uses, defs;
@@ -81,6 +82,7 @@ public class Munch {
         this.currentInstrs.add(instr);
     }
 
+    // movq $n, reg
     private void genMoveConst2Reg(Id reg,
                                   int n,
                                   // type of the "dest"
@@ -97,7 +99,7 @@ public class Munch {
         this.currentInstrs.add(instr);
     }
 
-    // generate a move instruction
+    // generate a move instruction, label -> block label
     private void genMoveConst2Reg(Id dest, String label) {
         List<X64.VirtualReg.T> uses, defs;
         uses = List.of();
@@ -310,6 +312,32 @@ public class Munch {
                                         defs);
                                 this.currentInstrs.add(instr);
                             }
+                            case "*" -> {
+                                // move the first operand to %rax
+                                genMoveId2Reg(Id.newName("%rax"), operands.get(0), targetType);
+
+                                // generate the imulq instruction
+                                uses = List.of(
+                                        new X64.VirtualReg.Reg(Id.newName("%rax"), targetType),
+                                        new X64.VirtualReg.Vid(operands.get(1), targetType));
+                                defs = List.of(
+                                        new X64.VirtualReg.Reg(Id.newName("%rax"), targetType));
+                                instr = new X64.Instr.Singleton(
+                                        Bop,
+                                        (uarg, darg) -> STR."imulq\t\{uarg.get(1)}",
+                                        uses,
+                                        defs);
+                                this.currentInstrs.add(instr);
+
+                                // move the result from %rax to the destination id
+                                genMoveReg2Id(id, Id.newName("%rax"), targetType);
+                            }
+                            case "&&" -> {
+                                // 如果要实现短路逻辑，需要用跳转指令跳转到不同的 cfg.block，但是之前没有对这个表达式做 transfer.if
+                                // 所以这里不做 短路逻辑，直接用 and 拿到结果
+                                genMoveId2Id(id, operands.get(0), targetType);
+                                genBop("andq", id, operands.get(1));
+                            }
                             default -> throw new Error(op);
                         }
                     } // end of "bop"
@@ -323,11 +351,51 @@ public class Munch {
                             // we only process no more than 6 arguments
                             if (i > 5) {
                                 // TODO: lab 4, exercise 4.
-                                throw new Todo("#arguments > 6");
+                                // throw new Todo("#arguments > 6");
+                                Id value = args.get(i);
+                                Id transferReg = X64.Register.argPassingRegs.getFirst();
+                                // 把剩余的参数 从右到左 压到栈中，正常情况用 rdi 寄存器中转
+                                genMoveId2Reg(transferReg, value, new X64.Type.Int());
+                                int offset = (i - 6) * X64.WordSize.bytesOfWord;
+                                uses = List.of(new X64.VirtualReg.Reg(Id.newName("%rdi"), new X64.Type.Int()),
+                                        new X64.VirtualReg.Reg(Id.newName("%rsp"), new X64.Type.Int()));
+                                defs = List.of();
+
+                                // mov    %rdi,0x8(%rsp) //传送di寄存器的值到(变量h) 0x8(%rsp)位置
+                                instr = new X64.Instr.Singleton(
+                                        Move,
+                                        (uarg, darg) -> STR."movq\t%edi, \{offset > 0? offset : ""}(%rsp)",
+                                        uses,
+                                        defs
+                                );
+                                this.currentInstrs.add(instr);
+                            } else {
+                                // 把实参的值 从左到右 传递给 传参寄存器
+                                Id value = args.get(i);
+                                Id argReg = X64.Register.argPassingRegs.get(i);
+                                if (args.size() > 6 && i == 0) {
+                                    // 第一个参数放到 %rax 暂存
+                                    genMoveId2Reg(X64.Register.allRegs.getFirst(), value, new X64.Type.Int());
+                                    continue;
+                                }
+                                // 为什么一定是 int 类型？
+                                genMoveId2Reg(argReg, value, new X64.Type.Int());
                             }
-                            Id value = args.get(i);
-                            Id argReg = X64.Register.argPassingRegs.get(i);
-                            genMoveId2Reg(argReg, value, new X64.Type.Int());
+                        }
+                        if (args.size() > 6) {
+                            uses = List.of(
+                                    new X64.VirtualReg.Reg(Id.newName("%rax"), new X64.Type.Int()));
+                            defs = List.of(
+                                    new X64.VirtualReg.Reg(Id.newName("%rdi"), new X64.Type.Int()));
+
+                            // mov %rax,%rdi //最后将ax寄存器保存的a变量的值传送到di寄存器
+                            instr = new X64.Instr.Singleton(
+                                    Move,
+                                    (uarg, darg) -> STR."movq\t\{uarg.getFirst()}, \{darg.getFirst()}",
+                                    uses,
+                                    defs
+                            );
+                            this.currentInstrs.add(instr);
                         }
                         genCallIndirect(func);
                         genMoveReg2Id(id, X64.Register.retReg, munchType(retType));
@@ -362,6 +430,7 @@ public class Munch {
                     }
                     case Cfg.Exp.New(Id clsId) -> {
                         X64.Type.T type = this.allVars.get(id);
+
                         // the 1st argument: virtual table pointer
                         Id argReg0 = X64.Register.argPassingRegs.getFirst();
                         int sizeOfClass = this.layouts.classSize(clsId);
@@ -380,9 +449,85 @@ public class Munch {
                         genMoveId2Reg(argReg, x, new X64.Type.Int());
                         genCallDirect("Tiger_print");
                     }
+                    case Cfg.Exp.ArraySelect(Id array,
+                                             Id index) -> {
+                        // movq (arr, index, 8), idReg
+                        uses = List.of(new X64.VirtualReg.Vid(array, new X64.Type.IntArray()),
+                                new X64.VirtualReg.Vid(index, new X64.Type.Int()));
+                        defs = List.of(new X64.VirtualReg.Vid(id, new X64.Type.Int()));
+                        instr = new X64.Instr.Singleton(
+                                Move,
+                                (uarg, darg) -> STR."movq\t(\{uarg.get(0)},\t\{uarg.get(1)},\t\{X64.WordSize.bytesOfWord}),\t\{uarg.getFirst()}",
+                                uses,
+                                defs
+                        );
+                        this.currentInstrs.add(instr);
+                    }
+                    case Cfg.Exp.Length(Id array) -> {
+                        Id arrayLength =
+                                (Id) array.getPlist().get("length");
+                        // X64.VirtualReg.Vid arrayLength = new X64.VirtualReg.Vid(
+                        //         (Id) array.getPlist().get("length"),
+                        //         new X64.Type.Int()
+                        // );
+                        uses = List.of(new X64.VirtualReg.Vid(array, new X64.Type.IntArray())
+                                ,new X64.VirtualReg.Vid(arrayLength, new X64.Type.Int())
+                        );
+                        defs = List.of(new X64.VirtualReg.Vid(id, new X64.Type.Int()));
+                        // movq (arr, index, width) x
+                        instr = new X64.Instr.Singleton(
+                                Move,
+                                (uarg, darg) -> STR."movq\t(\{uarg.get(0)},\t\{uarg.get(1)},\t\{X64.WordSize.bytesOfWord}),\t\{uarg.getFirst()}",
+                                uses,
+                                defs
+                        );
+                        this.currentInstrs.add(instr);
+                    }
+                    case Cfg.Exp.NewIntArray(Id size) -> {
+                        // 参数只有数组长度一个参数
+                        Id argReg0 = X64.Register.argPassingRegs.getFirst();
+                        genMoveId2Id(argReg0, size, new X64.Type.Int());
+
+                        genCallDirect(("Tiger_newArray"));
+                        Id retReg = X64.Register.retReg;
+                        genMoveReg2Id(id, retReg, new X64.Type.IntArray());
+                    }
                     default -> throw new Error(s);
                 }
             }
+            case Cfg.Stm.AssignArray(Id array,
+                                     Id index,
+                                     Id value) -> {
+                X64.Type.T targetType = new X64.Type.Int();
+                // genMoveId2Reg(Id.newName("%rax"), index, targetType);
+                // uses = List.of(
+                //         new X64.VirtualReg.Reg(Id.newName("%rax"), targetType)
+                //         // 乘数是 int 类型的宽度，这里没法引用
+                // );
+                // defs = List.of(new X64.VirtualReg.Reg(Id.newName("%rax"), targetType));
+                // // rax(index) = rax * bytesOfWord
+                // instr = new X64.Instr.Singleton(
+                //         Bop,
+                //         (uarg, darg) -> STR."imulq\t$\{X64.WordSize.bytesOfWord}",
+                //         uses,
+                //         defs
+                // );
+                // this.currentInstrs.add(instr);
+                uses = List.of(new X64.VirtualReg.Vid(value, targetType),
+                        new X64.VirtualReg.Vid(index, targetType),
+                        new X64.VirtualReg.Vid(array, new X64.Type.IntArray()));
+                defs = List.of();
+
+                // movq value, (arrayAddress, index, width)
+                instr = new X64.Instr.Singleton(
+                        Move,
+                        (uarg, darg) -> STR."movq\t\{uarg.getFirst()},\t(\{uarg.get(2)},\t\{uarg.get(1)},\t\{X64.WordSize.bytesOfWord})",
+                        uses,
+                        defs
+                );
+                this.currentInstrs.add(instr);
+            }
+            default -> throw new IllegalStateException("Unexpected value: " + s);
         }
     }
 
@@ -487,16 +632,26 @@ public class Munch {
                 for (X64.Dec.T formal : formals) {
                     if (index > 5) {
                         // TODO: lab 4, exercise 4.
-                        throw new Todo("arguments > 6");
-                    }
-                    switch (formal) {
-                        case X64.Dec.Singleton(
-                                X64.Type.T type,
-                                Id id1
-                        ) -> {
-                            genMoveReg2Id(id1,
-                                    X64.Register.argPassingRegs.get(index),
-                                    type);
+                        // throw new Todo("arguments > 6");
+                        // 从内存栈中把参数读到 虚拟寄存器中（变量）
+                        switch (formal) {
+                            case X64.Dec.Singleton(X64.Type.T type,
+                                                   Id id1
+                            ) -> {
+                                genLoad(id1, Id.newName("%rbp"), (index - 5 + 1 ) * X64.WordSize.bytesOfWord);
+                            }
+                        }
+                    } else{
+                        switch (formal) {
+                            case X64.Dec.Singleton(
+                                    X64.Type.T type,
+                                    Id id1
+                            ) -> {
+                                // 这里是把 传参寄存器 中的值拿出来赋给变量
+                                genMoveReg2Id(id1,
+                                        X64.Register.argPassingRegs.get(index),
+                                        type);
+                            }
                         }
                     }
                     index++;

@@ -2,6 +2,9 @@ package util;
 
 import java.io.Serializable;
 
+/**
+ * Block 基本块的唯一标识符
+ */
 public class Label implements Serializable {
     private final int i;
     private static int count = 0;

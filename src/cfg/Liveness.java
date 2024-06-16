@@ -53,10 +53,10 @@ public class Liveness {
                 killSet.add(id);
                 expList.add(exp);
             }
-            case Cfg.Stm.AssignArray(Id array, Cfg.Exp.T index, Cfg.Exp.T value) -> {
+            case Cfg.Stm.AssignArray(Id array, Id index, Id value) -> {
                 killSet.add(array);
-                expList.add(index);
-                expList.add(value);
+                genSet.add(index);
+                genSet.add(value);
             }
             default -> throw new IllegalStateException(STR."Unexpected value: \{t}");
         }

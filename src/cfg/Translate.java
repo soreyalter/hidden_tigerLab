@@ -161,6 +161,7 @@ public class Translate {
                 Id x = Id.newNoname();
                 // CodePtr x;
                 emitDec(new Cfg.Dec.Singleton(new Cfg.Type.CodePtr(), x));
+                // TODO：沟槽的赤石吧不改了就这样吧
 
                 Id expId = doitExp(exp_);
                 // x = getMethod(this, ClassName, MethodName)
@@ -182,6 +183,8 @@ public class Translate {
                 return retTempId;
             }
             case Ast.Exp.Length(Ast.Exp.T array) -> {
+                // x1 = array
+                // x2 = x1.length
                 Id arrayId = doitExp(array);
                 Id tempId = Id.newNoname();
                 emitDec(new Cfg.Dec.Singleton(new Cfg.Type.Int(), tempId));
@@ -190,10 +193,15 @@ public class Translate {
             }
             case Ast.Exp.NewIntArray(Ast.Exp.T expp) -> {
                 // x = new int[exp]
+                // int x1; int[] x2;
+                // x1 = exp;
+                // x2 = new int[x1];
                 Id expId = doitExp(expp);
                 Id tempId = Id.newNoname();
-                emitDec(new Cfg.Dec.Singleton(new Cfg.Type.Int(), tempId));
+                emitDec(new Cfg.Dec.Singleton(new Cfg.Type.IntArray(), tempId));
                 emit(new Cfg.Stm.Assign(tempId, new Cfg.Exp.NewIntArray(expId)));
+                // 给这个数组类型的 Id 添加要给 length 属性，值为 expId
+                tempId.getPlist().put("length", expId);
                 return tempId;
             }
             case Ast.Exp.NewObject(Id id) -> {
@@ -232,12 +240,12 @@ public class Translate {
             }
             case Ast.Stm.AssignArray(Ast.AstId id, Ast.Exp.T index, Ast.Exp.T exp) -> {
                 // ArrayId[index] = exp ->
+                // x_1 = index
+                // x_2 = exp
                 // ArrayId[x_1] = x_2
                 Id indexId = doitExp(index);
                 Id expId = doitExp(exp);
-                emit(new Cfg.Stm.AssignArray(id.freshId,
-                        new Cfg.Exp.Eid(indexId, new Cfg.Type.Int()),
-                        new Cfg.Exp.Eid(expId, new Cfg.Type.Int())));
+                emit(new Cfg.Stm.AssignArray(id.freshId, indexId, expId));
             }
             case Ast.Stm.Block(List<Ast.Stm.T> stms) -> {
                 for (Ast.Stm.T s : stms) {
@@ -407,7 +415,7 @@ public class Translate {
                     Cfg.Function.Singleton func = (Cfg.Function.Singleton)doitMethod(methodSingle);
                     // 添加到全局函数列表
                     this.functions.add(func);
-                    // 添加到嗷当前类的 虚函数表 中
+                    // 添加到当前类的 虚函数表 中
                     res.second().add(new Cfg.Vtable.Entry(func.retType(), func.classId(), func.functionId(), func.formals()));
                 }
                 // 现在 res.first 中包含当前类的所有属性，res.second 中包含当前类的所有方法（虚函数表）
@@ -492,11 +500,11 @@ public class Translate {
                         tree.addNode(cls);
                         tree.addNode(parentClass);
                         tree.addEdge(parentClass, cls);
-                        System.out.println("=========== add parentClass edge done ============");
+                        // System.out.println("=========== add parentClass edge done ============");
                     } else {
                         tree.addNode(cls);
                         tree.addEdge(objectClass, cls);
-                        System.out.println("=========== add nonparentClass edge done ============");
+                        // System.out.println("=========== add nonparentClass edge done ============");
                     }
                 });
                 return tree;

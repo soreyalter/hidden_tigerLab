@@ -1,0 +1,9 @@
+digraph g{
+	size = "10, 10";
+	node [color=lightblue2, style=filled];"L_2"->"L_3"[label=""];
+"L_1"->"L_3"[label=""];
+"L_0"->"L_2"[label=""];
+"L_0"->"L_1"[label=""];
+
+}
+
