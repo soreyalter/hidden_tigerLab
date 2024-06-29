@@ -44,7 +44,11 @@ public class Tiger {
 
         Pass<Ast.Program.T, Cfg.Program.T> transPass =
                 new Pass<>("translating to CFG",
-                        new cfg.Translate_Internal()::translate,
+// <<<<<<< HEAD
+//                         new cfg.Translate_Internal()::translate,
+// =======
+                        new cfg.Translate()::doitProgram,
+// >>>>>>> lab4
                         newAst,
                         Control.Verbose.L0);
         Cfg.Program.T cfg = transPass.apply();
@@ -66,5 +70,4 @@ public class Tiger {
 
     }
 }
-
 

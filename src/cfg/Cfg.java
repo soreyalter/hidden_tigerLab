@@ -1,9 +1,6 @@
 package cfg;
 
-import util.Dot;
-import util.Id;
-import util.Label;
-import util.Todo;
+import util.*;
 
 import java.io.Serializable;
 import java.util.List;
@@ -105,23 +102,39 @@ public class Cfg {
 
     // /////////////////////////////////////////////////////////
     // virtual function table
+    // global table ?
     public static class Vtable {
         public sealed interface T extends Serializable
                 permits Singleton {
         }
 
+        // 虚拟表项
         public record Entry(Type.T retType,
                             Id classId,
                             Id functionId,
                             List<Dec.T> argTypes) implements Serializable {
         }
 
-        public record Singleton(Id name,
+        public record Singleton(Id name,    // current class id
                                 List<Entry> funcTypes) implements T {
         }
-
+        // name,
+        // Type.T retType,
+        // Id classId,
+        // Id functionId,
+        // List<Dec.T> argTypes
         public static void pp(T vtable) {
             switch (vtable) {
+                /*
+                * struct V_vtable {
+                *     int func1(int a, int b,);
+                *     int[] func2(A x, B y,);
+                * } V_vtable_ = {
+                *     .func1 = class_func1,
+                *     .func2 = class_func2,
+                * }
+                *
+                * */
                 case Singleton(Id name, List<Entry> funcTypes) -> {
                     printSpaces();
                     sayln(STR."struct V_\{name} {");
@@ -156,6 +169,7 @@ public class Cfg {
 
     // /////////////////////////////////////////////////////////
     // structures
+    // translate Java.class to Cpp.struct ?
     public static class Struct {
         public sealed interface T extends Serializable
                 permits Singleton {
@@ -171,7 +185,16 @@ public class Cfg {
                         Id clsName,
                         List<Cfg.Dec.T> fields
                 ) -> {
+                     // struct S_ClassName {
+                     //     struct V_ClassName *vptr;
+                     //     int a
+                     //     int b
+                     // } S_ClassName_ = {
+                     //     这句是C语言语法中的初始化，将上面那个vptr指针的值设置为虚函数表的地址
+                     //     .vptr = &V_ClassName_;
+                     // }
                     printSpaces();
+                    // Id.toString 重写了，这里类肯定是有 origName 的，所以打印出来就是原类名
                     sayln(STR."struct S_\{clsName.toString()} {");
                     indent();
                     // the first field is special
@@ -200,27 +223,35 @@ public class Cfg {
     // expression
     public static class Exp {
         public sealed interface T extends Serializable
-                permits Bop, Call, Eid, GetMethod, Int, New, Print {
+                permits Bop, Call, Eid, GetMethod, Int, New, Print, ArraySelect, Length, NewIntArray {
         }
 
+        public record NewIntArray(Id size) implements T {
+        }
+        public record Length(Id array) implements T {
+        }
+
+        // + [a, b, c] -> int, +, -, *, <, &&
         public record Bop(String op,
                           List<Id> operands,
                           Type.T type) implements T {
         }
 
+        // funcName(x, y) -> int
         public record Call(Id func,
                            List<Id> operands,
                            Type.T retType) implements T {
         }
 
+        // int x
         public record Eid(Id x,
                           Type.T type) implements T {
         }
 
         // get virtual method:
         // getMethod(objId, classId, methodId)
-        public record GetMethod(Id objId,
-                                Id classId,
+        public record GetMethod(Id objId,   // 实例
+                                Id classId, // 类名，从类的虚函数表找函数？
                                 Id methodId) implements T {
         }
 
@@ -234,8 +265,12 @@ public class Cfg {
         public record Print(Id x) implements T {
         }
 
+        public record ArraySelect(Id array, Id index) implements T{}
+
         public static void pp(Exp.T t) {
             switch (t) {
+                case Length(Id array) -> say(STR."\{array.toString()}.length");
+                // +(1, 2, 3, ) @ty: int
                 case Bop(String op, List<Id> operands, Type.T type) -> {
                     say(STR."\{op}(");
                     operands.forEach((e) -> {
@@ -245,6 +280,7 @@ public class Cfg {
                     Type.pp(type);
                 }
                 case Call(Id func, List<Id> args, Type.T retType) -> {
+                    // func(x, y, ) @retType: int
                     say(STR."\{func.toString()}(");
                     args.forEach((e) -> {
                         say(STR."\{e.toString()}, ");
@@ -254,11 +290,19 @@ public class Cfg {
                 }
                 case Eid(Id id, Type.T type) -> say(STR."\{id}");
                 case GetMethod(Id objId, Id classId, Id methodId) ->
+                        // getMethod(obj, Class, func)
                         say(STR."getMethod(\{objId.toString()}, \{classId.toString()}, \{methodId.toString()})");
                 case Int(int n) -> say(STR."\{n}");
                 case New(Id classId) -> say(STR."new \{classId.toString()}()");
                 case Print(Id x) -> say(STR."print(\{x.toString()})");
-                default -> throw new Todo(t);
+                // array[index]
+                case ArraySelect(Id array, Id index) -> say(STR."\{array.toString()}[\{index.toString()}]");
+                // new int[size]
+                case NewIntArray(Id size) -> say(STR."new int[\{size.toString()}]");
+                default -> {
+                    // throw new Todo(t);
+                    say("Error: Exp prettyPrint failed.");
+                }
             }
         }
     }
@@ -268,8 +312,14 @@ public class Cfg {
     // statement
     public static class Stm {
         public sealed interface T extends Serializable
-                permits Assign {
+                permits Assign, AssignArray {
         }
+
+        public record AssignArray(Id array,
+                                  Id index,
+                                  Id value) implements T{
+        }
+
 
         // assign
         // "x" should not be "null", even if the exp is not used.
@@ -285,6 +335,15 @@ public class Cfg {
                     Exp.pp(exp);
                     sayln(";");
                 }
+                case AssignArray(Id array, Id index, Id value) -> {
+                    printSpaces();
+                    sayln(STR."\{array.toString()}[\{index.toString()}] = \{value.toString()};");
+                    // Exp.pp(index);
+                    // say(STR."] = ");
+                    // Exp.pp(value);
+                    // sayln(";");
+                }
+
             }
         }
     }
@@ -297,7 +356,7 @@ public class Cfg {
                 permits If, Jmp, Ret {
         }
 
-        public record If(Id x,
+        public record If(Id x,  // 为什么这个是id而不是exp
                          Block.T trueBlock,
                          Block.T falseBlock) implements T {
         }
@@ -305,6 +364,7 @@ public class Cfg {
         public record Jmp(Block.T target) implements T {
         }
 
+        // 这个id是什么东西
         public record Ret(Id x) implements T {
         }
 
@@ -315,11 +375,11 @@ public class Cfg {
                         Block.T thenn,
                         Block.T elsee
                 ) -> {
+                    // from = 源基本块名
                     d.insert(from, Block.getLabel(thenn).toString());
                     d.insert(from, Block.getLabel(elsee).toString());
                 }
-                case Jmp(Block.T target) -> d.insert(from,
-                        Block.getLabel(target).toString());
+                case Jmp(Block.T target) -> d.insert(from, Block.getLabel(target).toString());
                 case Ret(_) -> {
                 }
             }
@@ -332,16 +392,19 @@ public class Cfg {
                         Block.T thenn,
                         Block.T elsee
                 ) -> {
+                    // if(x, thenBlock, elseBlock);
                     printSpaces();
                     say(STR."if(\{x.toString()}");
                     say(STR.", \{Block.getLabel(thenn).toString()}, \{Block.getLabel(elsee).toString()});");
                     say(STR.", \{Block.getLabel(thenn)}, \{Block.getLabel(elsee)});");
                 }
                 case Jmp(Block.T target) -> {
+                    // jmp targetBlock;
                     printSpaces();
                     say(STR."jmp \{Block.getLabel(target).toString()};");
                 }
                 case Ret(Id x) -> {
+                    // ret x;
                     printSpaces();
                     say(STR."ret \{x.toString()};");
                 }
@@ -356,6 +419,7 @@ public class Cfg {
                 permits Singleton {
         }
 
+        // 注意这个是record类
         public record Singleton(Label label,
                                 List<Stm.T> stms,
                                 // this is a special hack
@@ -363,7 +427,19 @@ public class Cfg {
                                 // we use a list instead of a singleton field
                                 List<Transfer.T> transfer) implements T {
         }
+        public static int size(T t){
+            switch (t) {
+                case Singleton(_, List<Stm.T> stms, _) -> {
+                    return stms.size();
+                }
+            }
+        }
 
+        /**
+         * 将语句s添加到基本块b中
+         * @param b Block 基本块
+         * @param s Stm 语句
+         */
         public static void add(T b, Stm.T s) {
             switch (b) {
                 case Singleton(
@@ -390,8 +466,7 @@ public class Cfg {
                         Label label,
                         List<Stm.T> _,
                         List<Transfer.T> trans
-                ) -> trans.forEach((tr) -> Transfer.dot(d,
-                        label.toString(), tr));
+                ) -> trans.forEach((tr) -> Transfer.dot(d, label.toString(), tr));
             }
         }
 
@@ -439,6 +514,21 @@ public class Cfg {
                                 List<Dec.T> formals,
                                 List<Dec.T> locals,
                                 List<Block.T> blocks) implements T {
+        }
+
+        /**
+         * 计算一个函数的 size，即其中的基本块数和语句数量
+         * @param t 函数对象
+         * @return <函数Id，基本块数，语句数>三元组
+         */
+        public static Tuple.Three<Id, Integer, Integer> size(Cfg.Function.T t) {
+            switch (t) {
+                case Singleton(_, _, Id functionId, _, _, List<Block.T> blocks) -> {
+                    int blockNum = blocks.size();
+                    int statementNum = blocks.stream().mapToInt(Block::size).sum();
+                    return new Tuple.Three<>(functionId, blockNum, statementNum);
+                }
+            }
         }
 
         public static void addBlock(T func, Block.T block) {
@@ -491,9 +581,11 @@ public class Cfg {
                         List<Dec.T> locals,
                         List<Block.T> blocks
                 ) -> {
+                    // dot 图名：classId-functionId
                     Dot d = new util.Dot(STR."\{classId.toString()}-\{functionId.toString()}");
                     blocks.forEach((b) -> Block.dot(b, d));
                     d.visualize();
+                    // d.toDot();
                 }
             }
         }
@@ -506,8 +598,14 @@ public class Cfg {
                         Id id,
                         List<Dec.T> formals,
                         List<Dec.T> locals,
+                        // 函数的 blocks 【不包含】函数签名 和 locals部分
                         List<Block.T> blocks
                 ) -> {
+                    // functionId(x, y, ){ @classId: classId.toString()
+                    //    int a;
+                    //    int b;
+                    //    pp(Blocks)
+                    // }
                     printSpaces();
                     Type.pp(retType);
                     say(STR." \{id}(");
@@ -543,6 +641,27 @@ public class Cfg {
                                 List<Vtable.T> vtables,
                                 List<Struct.T> structs,
                                 List<Function.T> functions) implements T {
+        }
+
+        public static void size(T prog) {
+            switch (prog) {
+                case Singleton(Id mainClassId,
+                               Id mainFuncId,
+                               List<Vtable.T> vtables,
+                               List<Struct.T> structs,
+                               List<Function.T> functions) -> {
+                    int totalBlocks = 0;
+                    int totalStmts = 0;
+                    for (Function.T func : functions) {
+                        Tuple.Three<Id, Integer, Integer> result = Function.size(func);
+                        sayln(STR."<\"\{result.first()}\", \{result.second()}, \{result.third()}>");
+                        totalBlocks += result.second();
+                        totalStmts += result.third();
+                    }
+                    sayln(STR."---------------------------------");
+                    sayln(STR."subtotal \{totalBlocks}, \{totalStmts}");
+                }
+            }
         }
 
         public static void dot(T prog) {

@@ -1,6 +1,7 @@
 package codegen;
 
 import cfg.Cfg;
+import jdk.dynalink.CallSiteDescriptor;
 import util.Id;
 import util.Property;
 import util.Todo;
@@ -16,6 +17,7 @@ public class Layout {
 
     Layout() {
         this.vtablePtrOffsetInObject = 0;
+        // hashMap inside
         this.sizeOfClassProp = new Property<>(Id::getPlist);
         this.methodOffsetProp = new Property<>(Id::getPlist);
     }
@@ -55,10 +57,19 @@ public class Layout {
                     List<Cfg.Dec.T> fields
             ) -> {
                 int offset = 0;
-                // the virtual function table pointer
+                // the virtual function table pointer, 0 -> vtable pointer
                 offset += X64.WordSize.bytesOfWord;
-                for (var entry : fields) {
+                for (Cfg.Dec.T entry : fields) {
                     // TODO: lab 4, exercise 2
+                    switch (entry) {
+                        case Cfg.Dec.Singleton(
+                                Cfg.Type.T type,
+                                Id id) -> {
+                            if (type instanceof Cfg.Type.IntArray) {
+
+                            }
+                        }
+                    }
                     offset += X64.WordSize.bytesOfWord;
                 }
                 sizeOfClassProp.put(clsId, offset);
@@ -107,7 +118,12 @@ public class Layout {
                                                 System.out.println(STR."class \{clsId.toString()} size = \{sizeOfClassProp.get(clsId).toString()}");
                                                 for (var entry : fields) {
                                                     // TODO: lab 4, exercise 2
-                                                    throw new Todo();
+                                                    // throw new Todo();
+                                                    int offset = X64.WordSize.bytesOfWord;
+                                                    for (Cfg.Dec.T field : fields) {
+                                                        System.out.println(STR."field \{field.toString()} offset = \{offset}");
+                                                        offset += X64.WordSize.bytesOfWord;
+                                                    }
                                                 }
                                             }
                                         }
@@ -115,7 +131,17 @@ public class Layout {
                                     //
                                     vtables.forEach((s) -> {
                                         // TODO: lab 4, exercise 2.
-                                        throw new Todo();
+                                        // throw new Todo();
+                                        switch (s) {
+                                            case Cfg.Vtable.Singleton(Id name,
+                                                                      List<Cfg.Vtable.Entry> funcTypes
+                                            ) -> {
+                                                System.out.println(STR."VTable for class \{name.toString()}: ");
+                                                for (Cfg.Vtable.Entry entry : funcTypes) {
+                                                    System.out.println(STR."    method \{entry.functionId().toString()} offset = \{methodOffset(name, entry.functionId())}");
+                                                }
+                                            }
+                                        }
                                     });
                                 });
                 trace.doit();
