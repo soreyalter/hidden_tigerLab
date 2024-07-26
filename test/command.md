@@ -25,3 +25,14 @@ dot -Tpng example.dot -o example.png
 ```shell
 java --enable-preview -cp ./out/production/tiger Tiger -builtin SumRec.java -trace codegen.Layout.layoutProgram
 ```
+```shell
+java --enable-preview -cp ./out/production/tiger Tiger -builtin SumRec.java -trace codegen.Munch.munchProgram
+```
+
+## Lab 5
+```shell
+java --enable-preview -cp ./out/production/tiger Tiger -builtin SumRec.java -trace regalloc.StackAllocator.allocProgram
+
+
+```
+

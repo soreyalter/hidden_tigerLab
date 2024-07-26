@@ -364,7 +364,7 @@ public class Munch {
                                 // mov    %rdi,0x8(%rsp) //传送di寄存器的值到(变量h) 0x8(%rsp)位置
                                 instr = new X64.Instr.Singleton(
                                         Move,
-                                        (uarg, darg) -> STR."movq\t%edi, \{offset > 0? offset : ""}(%rsp)",
+                                        (uarg, darg) -> STR."movq\t%edi,\t\{offset > 0? offset : ""}(%rsp)",
                                         uses,
                                         defs
                                 );
@@ -397,6 +397,7 @@ public class Munch {
                             );
                             this.currentInstrs.add(instr);
                         }
+                        // callq func
                         genCallIndirect(func);
                         genMoveReg2Id(id, X64.Register.retReg, munchType(retType));
                     }
@@ -431,11 +432,11 @@ public class Munch {
                     case Cfg.Exp.New(Id clsId) -> {
                         X64.Type.T type = this.allVars.get(id);
 
-                        // the 1st argument: virtual table pointer
+                        // the 1st argument: size of class instance
                         Id argReg0 = X64.Register.argPassingRegs.getFirst();
                         int sizeOfClass = this.layouts.classSize(clsId);
                         genMoveConst2Reg(argReg0, sizeOfClass, new X64.Type.Int());
-                        // the 2nd argument
+                        // the 2nd argument: virtual table pointer
                         Id argReg1 = X64.Register.argPassingRegs.get(1);
                         String vtableName = STR.".V_\{clsId.toString()}";
                         genMoveConst2Reg(argReg1, vtableName);
